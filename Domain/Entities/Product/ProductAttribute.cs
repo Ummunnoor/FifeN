@@ -7,12 +7,12 @@ namespace Domain.Entities.Product
 {
     public class ProductAttribute
     {
-        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public Guid Id { get; set; } = Guid.NewGuid();
 
         public required string Key { get; set; }      // e.g. "ModelNo", "WaterResistance", "Color", "Size"
         public required string Value { get; set; }    // "RX009", "30m", "Black", "XL"
 
-        public string ProductId { get; set; } = null!;
+        public Guid ProductId { get; set; }
         public Product Product { get; set; } = null!;
     }
 }

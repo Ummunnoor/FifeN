@@ -12,7 +12,7 @@ namespace Application.DTOs.Product
         public required decimal Price { get; set; }
         public int? Quantity { get; set; }
         public required string ImageUrl { get; set; }
-        public string? CategoryId { get; set; }
+        public  Guid? CategoryId { get; set; }
 
         // Optional dynamic attributes
         public List<ProductAttributeDTO>? Attributes { get; set; }

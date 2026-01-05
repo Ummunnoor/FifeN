@@ -4,17 +4,20 @@ using Application.Services.Interfaces;
 using Application.Services.Interfaces.IProductService;
 using AutoMapper;
 using Domain.Entities.Product;
+using Microsoft.EntityFrameworkCore;
 
 namespace Application.Services.Implementations
 {
     public class ProductService : IProductService
     {
         private readonly IGeneric<Product> _productRepository;
+        private readonly IGeneric<Category> _categoryRepository;
         private readonly IMapper _mapper;
 
-        public ProductService(IGeneric<Product> productRepository, IMapper mapper)
+        public ProductService(IGeneric<Product> productRepository, IGeneric<Category> categoryRepository, IMapper mapper)
         {
             _productRepository = productRepository;
+            _categoryRepository = categoryRepository;
             _mapper = mapper;
         }
 
@@ -22,6 +25,18 @@ namespace Application.Services.Implementations
         {
             try
             {
+                if(createProductDTO.CategoryId.HasValue)
+                {
+                    var category = await _categoryRepository.GetByIdAsync(createProductDTO.CategoryId.Value);
+                    if (category == null)
+                    {
+                        return new BaseResponse<GetProductDTO>(
+                            Success: false,
+                            Message: "Category not found",
+                            Data: null
+                        );
+                    }
+                }
                 var entity = _mapper.Map<Product>(createProductDTO);
 
                 var createdProduct = await _productRepository.AddAsync(entity);
@@ -142,7 +157,8 @@ namespace Application.Services.Implementations
         {
             try
             {
-                var existingProduct = await _productRepository.GetByIdAsync(updateProductDTO.Id);
+                var existingProduct = await _productRepository.Query()
+                    .Include(p => p.Attributes).FirstOrDefaultAsync(p => p.Id == updateProductDTO.Id);
                 if (existingProduct == null)
                 {
                     return new BaseResponse<GetProductDTO>(

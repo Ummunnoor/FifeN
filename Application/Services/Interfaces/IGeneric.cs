@@ -5,6 +5,7 @@ namespace Application.Services.Interfaces
 {
     public interface IGeneric<TEntity> where TEntity : class
     {
+        IQueryable<TEntity> Query();
         Task<IEnumerable<TEntity>> GetAllAsync();
         Task<TEntity> GetByIdAsync(Guid id);
         Task<TEntity> AddAsync(TEntity entity);

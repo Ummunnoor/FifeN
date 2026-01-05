@@ -2,8 +2,8 @@ namespace Application.DTOs.Category
 {
     public abstract class BaseCategoryDTO
     {
-        public required string Name { get; set; }         // Category name
-        public required string Description { get; set; }  // Optional description
+        public required string Name { get; set; }   
+        public string? Description { get; set; }      // Category name
         public string? ImageUrl { get; set; }     // Optional banner/icon image
     }
 }

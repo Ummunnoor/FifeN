@@ -62,7 +62,7 @@ namespace Application.Services.Implementations
                 {
                     return new BaseResponse<bool>(
                         Success: true,
-                        Message: "Category could not be deleted",
+                        Message: "Category deleted successfully!",
                         Data: true
                     );
                 }
