@@ -24,17 +24,18 @@ namespace Persistence.Migrations
 
             modelBuilder.Entity("Domain.Entities.Product.Category", b =>
                 {
-                    b.Property<string>("Id")
-                        .HasColumnType("text");
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ImageUrl")
                         .HasColumnType("text");
 
                     b.Property<bool>("IsActive")
@@ -47,9 +48,6 @@ namespace Persistence.Migrations
                     b.Property<Guid?>("ParentCategoryId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ParentCategoryId1")
-                        .HasColumnType("text");
-
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
 
@@ -58,19 +56,19 @@ namespace Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ParentCategoryId1");
+                    b.HasIndex("CategoryId");
 
                     b.ToTable("Categories");
                 });
 
             modelBuilder.Entity("Domain.Entities.Product.Product", b =>
                 {
-                    b.Property<string>("Id")
-                        .HasColumnType("text");
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
 
-                    b.Property<string>("CategoryId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -92,16 +90,16 @@ namespace Persistence.Migrations
 
             modelBuilder.Entity("Domain.Entities.Product.ProductAttribute", b =>
                 {
-                    b.Property<string>("Id")
-                        .HasColumnType("text");
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Key")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("ProductId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Value")
                         .IsRequired()
@@ -116,11 +114,9 @@ namespace Persistence.Migrations
 
             modelBuilder.Entity("Domain.Entities.Product.Category", b =>
                 {
-                    b.HasOne("Domain.Entities.Product.Category", "ParentCategory")
+                    b.HasOne("Domain.Entities.Product.Category", null)
                         .WithMany("SubCategories")
-                        .HasForeignKey("ParentCategoryId1");
-
-                    b.Navigation("ParentCategory");
+                        .HasForeignKey("CategoryId");
                 });
 
             modelBuilder.Entity("Domain.Entities.Product.Product", b =>

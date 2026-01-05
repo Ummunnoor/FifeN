@@ -14,7 +14,7 @@ namespace Persistence.DependencyInjection
 {
     public  static class ServiceContainer
     {
-        public static IServiceCollection AddInfrastructureService(this IServiceCollection services, IConfiguration configuration)
+        public static IServiceCollection AddPersistenceServices(this IServiceCollection services, IConfiguration configuration)
         {
             string connectionString = "DefaultConnection";
             services.AddDbContext<FifeNDbContext>(options =>
