@@ -5,6 +5,7 @@ using Application.Services.Interfaces.IProductService;
 using AutoMapper;
 using Domain.Entities.Product;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services.Implementations
 {
@@ -13,177 +14,159 @@ namespace Application.Services.Implementations
         private readonly IGeneric<Product> _productRepository;
         private readonly IGeneric<Category> _categoryRepository;
         private readonly IMapper _mapper;
+        private readonly ILogger<ProductService> _logger;
 
-        public ProductService(IGeneric<Product> productRepository, IGeneric<Category> categoryRepository, IMapper mapper)
+        public ProductService(IGeneric<Product> productRepository,IGeneric<Category> categoryRepository,IMapper mapper,ILogger<ProductService> logger)
         {
             _productRepository = productRepository;
             _categoryRepository = categoryRepository;
             _mapper = mapper;
+            _logger = logger;
         }
 
-        public async Task<BaseResponse<GetProductDTO>> CreateProductAsync(CreateProductDTO createProductDTO)
+        public async Task<BaseResponse<GetProductDTO>> CreateProductAsync(
+            CreateProductDTO createProductDTO)
         {
-            try
+            _logger.LogInformation(
+                "Creating product. Name: {Name}, CategoryId: {CategoryId}",
+                createProductDTO.Name,
+                createProductDTO.CategoryId);
+
+            if (createProductDTO.CategoryId.HasValue)
             {
-                if(createProductDTO.CategoryId.HasValue)
-                {
-                    var category = await _categoryRepository.GetByIdAsync(createProductDTO.CategoryId.Value);
-                    if (category == null)
-                    {
-                        return new BaseResponse<GetProductDTO>(
-                            Success: false,
-                            Message: "Category not found",
-                            Data: null
-                        );
-                    }
-                }
-                var entity = _mapper.Map<Product>(createProductDTO);
+                var category = await _categoryRepository
+                    .GetByIdAsync(createProductDTO.CategoryId.Value);
 
-                var createdProduct = await _productRepository.AddAsync(entity);
-
-                if (createdProduct == null)
+                if (category == null)
                 {
+                    _logger.LogWarning(
+                        "Category not found. CategoryId: {CategoryId}",
+                        createProductDTO.CategoryId);
+
                     return new BaseResponse<GetProductDTO>(
                         Success: false,
-                        Message: "Product could not be created",
-                        Data: null
-                    );
+                        Message: "Category not found",
+                        Data: null);
                 }
-
-                var mapped = _mapper.Map<GetProductDTO>(createdProduct);
-
-                return new BaseResponse<GetProductDTO>(
-                    Success: true,
-                    Message: "Product created successfully!",
-                    Data: mapped
-                );
             }
-            catch (Exception ex)
-            {
-                return new BaseResponse<GetProductDTO>(
-                    Success: false,
-                    Message: $"Error occurred: {ex.Message}",
-                    Data: null
-                );
-            }
+
+            var entity = _mapper.Map<Product>(createProductDTO);
+            var createdProduct = await _productRepository.AddAsync(entity);
+
+            _logger.LogInformation(
+                "Product created successfully. ProductId: {ProductId}",
+                createdProduct.Id);
+
+            return new BaseResponse<GetProductDTO>(
+                Success: true,
+                Message: "Product created successfully",
+                Data: _mapper.Map<GetProductDTO>(createdProduct));
         }
 
-
-        public async Task<BaseResponse<bool>> DeleteProductAsync(DeleteProductDTO deleteProduct)
+        public async Task<BaseResponse<bool>> DeleteProductAsync(
+            DeleteProductDTO deleteProduct)
         {
-            try
+            _logger.LogInformation(
+                "Deleting product. ProductId: {ProductId}",
+                deleteProduct.Id);
+
+            int result = await _productRepository.DeleteAsync(deleteProduct.Id);
+
+            if (result == 0)
             {
-                int result = await _productRepository.DeleteAsync(deleteProduct.Id);
-                if (result > 0)
-                    return new BaseResponse<bool>(
-                        Success: true,
-                        Message: "Product deleted successfully",
-                        Data: true
-                    );
-                return new BaseResponse<bool>(
-                Success: false,
-                Message: "Product not found",
-                Data: false
-                );
-            }
-            catch (Exception ex)
-            {
+                _logger.LogWarning(
+                    "Product not found for deletion. ProductId: {ProductId}",
+                    deleteProduct.Id);
 
                 return new BaseResponse<bool>(
                     Success: false,
-                    Message: $"Error occurred: {ex.Message}",
-                    Data: false
-                );
+                    Message: "Product not found",
+                    Data: false);
             }
+
+            _logger.LogInformation(
+                "Product deleted successfully. ProductId: {ProductId}",
+                deleteProduct.Id);
+
+            return new BaseResponse<bool>(
+                Success: true,
+                Message: "Product deleted successfully",
+                Data: true);
         }
 
         public async Task<BaseResponse<IEnumerable<GetProductDTO>>> GetAllProductAsync()
         {
-            try
-            {
-                var products = await _productRepository.GetAllAsync();
-                var mapped = _mapper.Map<IEnumerable<GetProductDTO>>(products);
-                return new BaseResponse<IEnumerable<GetProductDTO>>(
-                    Success: true,
-                    Message: "Products retrieved successfully",
-                    Data: mapped
-                );
-            }
-            catch (Exception ex)
-            {
-                return new BaseResponse<IEnumerable<GetProductDTO>>(
-                    Success: false,
-                    Message: $"Error: {ex.Message}",
-                    Data: []
-                );
-            }
+            _logger.LogInformation("Retrieving all products");
+
+            var products = await _productRepository.GetAllAsync();
+
+            return new BaseResponse<IEnumerable<GetProductDTO>>(
+                Success: true,
+                Message: "Products retrieved successfully",
+                Data: _mapper.Map<IEnumerable<GetProductDTO>>(products));
         }
 
         public async Task<BaseResponse<GetProductDTO>> GetProductByIdAsync(Guid id)
         {
-            try
+            _logger.LogInformation(
+                "Retrieving product by id. ProductId: {ProductId}",
+                id);
+
+            var product = await _productRepository.GetByIdAsync(id);
+
+            if (product == null)
             {
-                var product = await _productRepository.GetByIdAsync(id);
+                _logger.LogWarning(
+                    "Product not found. ProductId: {ProductId}",
+                    id);
 
-                if (product == null)
-                {
-                    return new BaseResponse<GetProductDTO>(
-                        Success: false,
-                        Message: "Product not found",
-                        Data: null
-                    );
-                }
-
-                var mapped = _mapper.Map<GetProductDTO>(product);
-
-                return new BaseResponse<GetProductDTO>(
-                    Success: true,
-                    Message: "Product retrieved successfully",
-                    Data: mapped
-                );
-            }
-            catch (Exception ex)
-            {
                 return new BaseResponse<GetProductDTO>(
                     Success: false,
-                    Message: $"Error occurred: {ex.Message}",
-                    Data: null
-                );
+                    Message: "Product not found",
+                    Data: null);
             }
+
+            return new BaseResponse<GetProductDTO>(
+                Success: true,
+                Message: "Product retrieved successfully",
+                Data: _mapper.Map<GetProductDTO>(product));
         }
 
-
-        public async Task<BaseResponse<GetProductDTO>> UpdateProductAsync(UpdateProductDTO updateProductDTO)
+        public async Task<BaseResponse<GetProductDTO>> UpdateProductAsync(
+            UpdateProductDTO updateProductDTO)
         {
-            try
+            _logger.LogInformation(
+                "Updating product. ProductId: {ProductId}",
+                updateProductDTO.Id);
+
+            var existingProduct = await _productRepository
+                .Query()
+                .Include(p => p.Attributes)
+                .FirstOrDefaultAsync(p => p.Id == updateProductDTO.Id);
+
+            if (existingProduct == null)
             {
-                var existingProduct = await _productRepository.Query()
-                    .Include(p => p.Attributes).FirstOrDefaultAsync(p => p.Id == updateProductDTO.Id);
-                if (existingProduct == null)
-                {
-                    return new BaseResponse<GetProductDTO>(
-                        Success: false,
-                        Message: "Product not found",
-                        Data: null
-                    );
-                }
-                _mapper.Map(updateProductDTO, existingProduct);
-                var updatedProduct = await _productRepository.UpdateAsync(existingProduct);
-                var mapped = _mapper.Map<GetProductDTO>(updatedProduct);
-                return new BaseResponse<GetProductDTO>(
-                    Success: true,
-                    Message: "Product updated successfully!",
-                    Data: mapped
-                );
-            }
-            catch (Exception ex)
-            {
+                _logger.LogWarning(
+                    "Product not found for update. ProductId: {ProductId}",
+                    updateProductDTO.Id);
+
                 return new BaseResponse<GetProductDTO>(
                     Success: false,
-                    Message: $"Error occurred: {ex.Message}",
-                    Data: null
-                );
+                    Message: "Product not found",
+                    Data: null);
             }
+
+            _mapper.Map(updateProductDTO, existingProduct);
+            var updatedProduct = await _productRepository.UpdateAsync(existingProduct);
+
+            _logger.LogInformation(
+                "Product updated successfully. ProductId: {ProductId}",
+                updatedProduct.Id);
+
+            return new BaseResponse<GetProductDTO>(
+                Success: true,
+                Message: "Product updated successfully",
+                Data: _mapper.Map<GetProductDTO>(updatedProduct));
         }
     }
 }
