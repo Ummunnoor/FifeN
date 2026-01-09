@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
 namespace Application.DTOs
 {
     public record BaseResponse<T>(
@@ -10,6 +5,11 @@ namespace Application.DTOs
         string Message = "",
         T? Data = default
     );
+
+    public record BaseResponse(
+    bool Success = false,
+    string Message = ""
+);
 }
 
         

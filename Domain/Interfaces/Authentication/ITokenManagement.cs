@@ -12,7 +12,7 @@ namespace Domain.Interfaces.Authentication
         List<Claim> GetUserClaimsFromToken(string email);
         Task<bool> ValidateRefreshTokenAsync(string refreshToken);
         Task<string> GetUserIdByRefreshTokenAsync(string refreshToken);
-        Task<int> AddRefreshTokenAsync( string refreshToken);
+        Task<int> AddRefreshTokenAsync(string userId, string refreshToken);
         Task<int> UpdateRefreshTokenAsync(string userId, string refreshToken);
         string GenerateToken(List<Claim> claims);
 

@@ -5,7 +5,7 @@ namespace Domain.Interfaces.Authentication
 {
     public interface IUserManagement
     {
-        Task<bool> CreateUserAsync(User user);
+        Task<bool> CreateUserAsync(User user, string password);
         Task<bool> LoginUserAsync(User user);
         Task<User?> GetUserByEmailAsync(string email);
         Task<User> GetUserByIdAsync(string id);

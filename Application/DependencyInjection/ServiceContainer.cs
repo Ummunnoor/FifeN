@@ -1,6 +1,10 @@
 using Application.Mapping;
 using Application.Services.Implementations;
 using Application.Services.Interfaces.IProductService;
+using Application.Validators;
+using Application.Validators.Authentication;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Application.DependencyInjection
@@ -12,6 +16,11 @@ namespace Application.DependencyInjection
             services.AddAutoMapper(typeof(MappingConfig));
             services.AddScoped<IProductService, ProductService>();
             services.AddScoped<ICategoryService, CategoryService>();
+
+            services.AddFluentValidationAutoValidation();
+            services.AddValidatorsFromAssemblyContaining<CreateUserValidator>();
+
+            services.AddScoped<IValidationService, ValidationService>();
             return services;
         }
     }
