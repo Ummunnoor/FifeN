@@ -1,7 +1,6 @@
 using Application.DTOs;
 using Application.DTOs.Product;
 using Application.Services.Interfaces;
-using Application.Services.Interfaces.IProductService;
 using AutoMapper;
 using Domain.Entities.Product;
 using Microsoft.EntityFrameworkCore;

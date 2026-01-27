@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text;
 using Domain.Entities.Identity;
 using Domain.Interfaces.Authentication;
 using Microsoft.EntityFrameworkCore;
@@ -9,72 +10,126 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Persistence.Repositories.Authentication
 {
-    public class TokenManagement(FifeNDbContext dbContext, IConfiguration configuration) : ITokenManagement
+    public class TokenManagement : ITokenManagement
     {
-        public async Task<int> AddRefreshTokenAsync(string userId, string refreshToken)
+        private readonly FifeNDbContext _dbContext;
+        private readonly IConfiguration _configuration;
+
+        public TokenManagement(FifeNDbContext dbContext, IConfiguration configuration)
         {
-            dbContext.RefreshTokens.Add(new RefreshToken
-            {
-                UserId = userId,
-                Token = refreshToken
-            });
-            return await dbContext.SaveChangesAsync() > 0 ? 1 : 0;
+            _dbContext = dbContext;
+            _configuration = configuration;
         }
 
         public string GenerateToken(List<Claim> claims)
         {
-            var key = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!));
-            var cred = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            var expiration = DateTime.UtcNow.AddMinutes(30);
-            var token = new JwtSecurityToken(
-                issuer: configuration["Jwt:Issuer"],
-                audience: configuration["Jwt:Audience"],
-                claims: claims,
-                expires: expiration,
-                signingCredentials: cred
+            var key = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!)
             );
-            return new JwtSecurityTokenHandler().WriteToken(token);
-        }
 
-        public string GetRefreshToken()
-        {
-            const int byteSize = 64;
-            byte[] randomBytes = new byte[byteSize];
-            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
-            {
-                rng.GetBytes(randomBytes);
-            }
-            return Convert.ToBase64String(randomBytes);
+            var credentials = new SigningCredentials(
+                key,
+                SecurityAlgorithms.HmacSha256
+            );
+
+            var token = new JwtSecurityToken(
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
+                claims: claims,
+                expires: DateTime.UtcNow.AddMinutes(30),
+                signingCredentials: credentials
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
         public List<Claim> GetUserClaimsFromToken(string token)
         {
             var handler = new JwtSecurityTokenHandler();
             var jwtToken = handler.ReadJwtToken(token);
-            if (jwtToken != null)
             return jwtToken.Claims.ToList();
-            else return [];
         }
 
-        public async Task<string> GetUserIdByRefreshTokenAsync(string refreshToken)
+
+        public string GetRefreshToken()
         {
-            var token = await dbContext.RefreshTokens
-         .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
-            return token?.UserId!;
+            var bytes = RandomNumberGenerator.GetBytes(64);
+            return Convert.ToBase64String(bytes);
         }
 
-        public async Task<int> UpdateRefreshTokenAsync(string userId, string refreshToken)
+        public async Task<int> AddRefreshTokenAsync(string userId, string refreshToken)
         {
-            var user = dbContext.RefreshTokens.FirstOrDefault(rt => rt.Token == refreshToken);
-            if (user == null) return -1;
-            user.Token = refreshToken;
-            return await dbContext.SaveChangesAsync() > 0 ? 1 : 0;
+            var token = new RefreshToken
+            {
+                UserId = userId,
+                TokenHash = HashToken(refreshToken),
+                ExpiresAt = DateTime.UtcNow.AddDays(7),
+                IsRevoked = false
+            };
+
+            _dbContext.RefreshTokens.Add(token);
+            return await _dbContext.SaveChangesAsync();
         }
 
         public async Task<bool> ValidateRefreshTokenAsync(string refreshToken)
         {
-            var user = await dbContext.RefreshTokens.FirstOrDefaultAsync(rt => rt.Token == refreshToken);
-            return user != null;
+            var hash = HashToken(refreshToken);
+
+            return await _dbContext.RefreshTokens.AnyAsync(rt =>
+                rt.TokenHash == hash &&
+                !rt.IsRevoked &&
+                rt.ExpiresAt > DateTime.UtcNow);
+        }
+
+        public async Task<string> GetUserIdByRefreshTokenAsync(string refreshToken)
+        {
+            var hash = HashToken(refreshToken);
+
+            var token = await _dbContext.RefreshTokens.FirstOrDefaultAsync(rt =>
+                rt.TokenHash == hash &&
+                !rt.IsRevoked &&
+                rt.ExpiresAt > DateTime.UtcNow);
+
+            return token?.UserId
+                ?? throw new InvalidOperationException("Refresh token not found or invalid.");
+        }
+
+        public async Task<int> UpdateRefreshTokenAsync(string userId, string newRefreshToken)
+        {
+            var token = await _dbContext.RefreshTokens
+                .FirstOrDefaultAsync(rt =>
+                    rt.UserId == userId &&
+                    !rt.IsRevoked);
+
+            if (token == null)
+                return -1;
+
+            token.TokenHash = HashToken(newRefreshToken);
+            token.ExpiresAt = DateTime.UtcNow.AddDays(7);
+
+            return await _dbContext.SaveChangesAsync();
+        }
+
+        public async Task<int> RevokeRefreshTokenAsync(string refreshToken)
+        {
+            var hash = HashToken(refreshToken);
+
+            var token = await _dbContext.RefreshTokens
+                .FirstOrDefaultAsync(rt => rt.TokenHash == hash);
+
+            if (token == null)
+                return -1;
+
+            token.IsRevoked = true;
+            return await _dbContext.SaveChangesAsync();
+        }
+
+       
+        private static string HashToken(string token)
+        {
+            using var sha256 = SHA256.Create();
+            var bytes = Encoding.UTF8.GetBytes(token);
+            return Convert.ToBase64String(sha256.ComputeHash(bytes));
         }
     }
 }

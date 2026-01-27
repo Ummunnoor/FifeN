@@ -2,6 +2,7 @@ using System.Text;
 using Application.Services.Interfaces;
 using Application.Services.Interfaces.Logging;
 using Domain.Entities;
+using Domain.Entities.Enums;
 using Domain.Entities.Identity;
 using Domain.Entities.Product;
 using Domain.Interfaces.Authentication;
@@ -15,6 +16,7 @@ using Microsoft.IdentityModel.Tokens;
 using Persistence.Middleware;
 using Persistence.Repositories;
 using Persistence.Repositories.Authentication;
+using Persistence.Repositories.Vendor;
 using Persistence.Services;
 
 namespace Persistence.DependencyInjection
@@ -59,7 +61,7 @@ namespace Persistence.DependencyInjection
             }).AddJwtBearer(options =>
             {
                 options.SaveToken = true;
-                options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters()
+                options.TokenValidationParameters = new TokenValidationParameters()
                 {
                     ValidateIssuer = true,
                     ValidateAudience = true,
@@ -73,9 +75,27 @@ namespace Persistence.DependencyInjection
                 };
             });
 
-                services.AddScoped<IUserManagement, UserManagement>();
-                services.AddScoped<ITokenManagement, TokenManagement>();
-                services.AddScoped<IRoleManagement, RoleManagement>();
+            services.AddScoped<IUserManagement, UserManagement>();
+            services.AddScoped<ITokenManagement, TokenManagement>();
+            services.AddScoped<IRoleManagement, RoleManagement>();
+
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("AdminOnly", policy =>
+                    policy.RequireRole(nameof(AppRole.Admin)));
+
+                options.AddPolicy("VendorOnly", policy =>
+                    policy.RequireRole(nameof(AppRole.Vendor)));
+
+                options.AddPolicy("AdminOrVendor", policy =>
+                    policy.RequireRole(
+                        nameof(AppRole.Admin),
+                        nameof(AppRole.Vendor)
+                    ));
+            });
+            services.AddScoped<VendorRequestRepository, VendorRequestRepository>();
+            services.AddScoped<ITokenHasher, Sha256TokenHasher>();
+
             return services;
         }
 

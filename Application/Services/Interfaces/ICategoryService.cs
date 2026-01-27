@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Application.DTOs;
 using Application.DTOs.Category;
 
-namespace Application.Services.Interfaces.IProductService
+namespace Application.Services.Interfaces
 {
     public interface ICategoryService
     {

@@ -6,11 +6,11 @@ namespace Domain.Interfaces.Authentication
     public interface IUserManagement
     {
         Task<bool> CreateUserAsync(User user, string password);
-        Task<bool> LoginUserAsync(User user);
+        Task<User?> LoginUserAsync(string email, string password);
         Task<User?> GetUserByEmailAsync(string email);
         Task<User> GetUserByIdAsync(string id);
         Task<IEnumerable<User>> GetAllUsersAsync();
-        Task<int> RemoveUserByEmailAsync(string email);
-        Task<List<Claim>> GetUserClaimsAsync(string userEmail);
+        Task<bool> RemoveUserByEmailAsync(string email);
+        Task<List<Claim>> GetUserClaimsAsync(User user);
     }
 }

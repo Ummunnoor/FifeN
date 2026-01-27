@@ -4,6 +4,7 @@ using Application.Services.Interfaces;
 using Application.Services.Interfaces.Logging;
 using Application.Validators;
 using AutoMapper;
+using Domain.Entities.Enums;
 using Domain.Entities.Identity;
 using Domain.Interfaces.Authentication;
 using FluentValidation;
@@ -43,7 +44,10 @@ namespace Application.Services.Implementations.Authentication
 
         public async Task<BaseResponse<string>> CreateUserAsync(CreateUserDTO createUserDTO)
         {
-            var validationResult =await _validationService.ValidateAsync(createUserDTO, _createUserValidator);
+            // 1️⃣ Validate input
+            var validationResult =
+                await _validationService.ValidateAsync(createUserDTO, _createUserValidator);
+
             if (!validationResult.Success)
             {
                 return new BaseResponse<string>(
@@ -52,11 +56,12 @@ namespace Application.Services.Implementations.Authentication
                 );
             }
 
-            // 2️⃣ Map DTO → User entity
+            // 2️⃣ Map DTO → Identity User
             var user = _mapper.Map<User>(createUserDTO);
             user.UserName = createUserDTO.Email;
+            user.Email = createUserDTO.Email;
 
-            // 3️⃣ Create the user (Identity hashes password internally)
+            // 3️⃣ Create user (Identity hashes password internally)
             var created = await _userManagement.CreateUserAsync(user, createUserDTO.Password);
             if (!created)
             {
@@ -65,24 +70,23 @@ namespace Application.Services.Implementations.Authentication
                     Message: "Email already exists or user creation failed."
                 );
             }
-
-            // 4️⃣ Assign default role (always "User" / "Customer")
-            var roleAssigned = await _roleManagement.AddUserToRoleAsync(user, "User");
-            if (!roleAssigned)
+            try
             {
-                // Rollback user if role assignment fails
-                await _userManagement.RemoveUserByEmailAsync(user.Email!);
+                // 4️⃣ Assign default role (EXPLICIT, single role)
+                await _roleManagement.AssignRoleAsync(user, AppRole.User);
 
-                return new BaseResponse<string>(
-                    Success: false,
-                    Message: "User created but role assignment failed."
+                _logger.LogInformation(
+                    $"User '{user.Id}' created with role '{AppRole.User}'"
                 );
             }
+            catch
+            {
+                // 5️⃣ Rollback user if role assignment fails
+                await _userManagement.RemoveUserByEmailAsync(user.Email!);
+                throw; // Let middleware handle logging & response
+            }
 
-            // 5️⃣ Log success
-            _logger.LogInformation($"User {user.Id} created with default role 'User'");
-
-            // 6️⃣ Return successful response
+            // 6️⃣ Success response
             return new BaseResponse<string>(
                 Success: true,
                 Message: "User created successfully",
@@ -91,14 +95,80 @@ namespace Application.Services.Implementations.Authentication
         }
 
 
-        public Task<LoginResponse> LoginUserAsync(LoginUserDTO loginUserDTO)
+
+        public async Task<LoginResponse> LoginUserAsync(LoginUserDTO loginUserDTO)
         {
-            throw new NotImplementedException();
+            // 1️⃣ Validate input
+            var validationResult =
+                await _validationService.ValidateAsync(loginUserDTO, _loginUserValidator);
+
+            if (!validationResult.Success)
+            {
+                return new LoginResponse(
+                    Success: false,
+                    Message: validationResult.Message
+                );
+            }
+            var user = await _userManagement.LoginUserAsync(loginUserDTO.Email, loginUserDTO.Password);
+            if (user == null)
+            {
+                _logger.LogWarning(
+                    $"Failed login attempt for email '{loginUserDTO.Email}'"
+                );
+                return new LoginResponse(
+                    Success: false,
+                    Message: "Invalid email or password."
+                );
+            }
+            var claims = await _userManagement.GetUserClaimsAsync(user);
+            string jwtToken =  _tokenManagement.GenerateToken(claims);
+            string refreshToken = _tokenManagement.GetRefreshToken();
+            var addRefreshTokenResult = await _tokenManagement.AddRefreshTokenAsync(user!.Id, refreshToken);
+           if (addRefreshTokenResult <= 0)
+            {
+                return new LoginResponse(
+                    Success: false,
+                    Message: "Failed to generate refresh token."
+                );
+            }
+            return new LoginResponse(
+                Success: true,
+                Message: "Login successful.",
+                Token: jwtToken,
+                RefreshToken: refreshToken
+            );
+            
         }
 
-        public Task<LoginResponse> ReviveTokenAsync(string refreshToken)
+        public async Task<LoginResponse> ReviveTokenAsync(string refreshToken)
         {
-            throw new NotImplementedException();
+            var isValid = await _tokenManagement.ValidateRefreshTokenAsync(refreshToken);
+            if (!isValid)
+            {
+                return new LoginResponse(
+                    Success: false,
+                    Message: "Invalid refresh token."
+                );
+            }
+            var userId = await _tokenManagement.GetUserIdByRefreshTokenAsync(refreshToken);
+            var user = await _userManagement.GetUserByIdAsync(userId);
+            var claims = await _userManagement.GetUserClaimsAsync(user);
+            string jwtToken =  _tokenManagement.GenerateToken(claims);
+            string newRefreshToken = _tokenManagement.GetRefreshToken();
+            var updateRefreshTokenResult = await _tokenManagement.UpdateRefreshTokenAsync(user.Id, newRefreshToken);
+           if (updateRefreshTokenResult <= 0)
+            {
+                return new LoginResponse(
+                    Success: false,
+                    Message: "Failed to generate new refresh token."
+                );
+            }
+            return new LoginResponse(
+                Success: true,
+                Message: "Token revived successfully.",
+                Token: jwtToken,
+                RefreshToken: newRefreshToken
+            );
         }
     }
 }

@@ -17,6 +17,7 @@ namespace Persistence
         public DbSet<Category> Categories { get; set; } = null!;
         public DbSet<ProductAttribute> Attributes { get; set; } = null!;
         public DbSet<RefreshToken> RefreshTokens { get; set; } = null!;
+        public DbSet<VendorRequest> VendorRequests { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

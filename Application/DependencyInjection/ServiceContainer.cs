@@ -1,6 +1,6 @@
 using Application.Mapping;
 using Application.Services.Implementations;
-using Application.Services.Interfaces.IProductService;
+using Application.Services.Interfaces;
 using Application.Validators;
 using Application.Validators.Authentication;
 using FluentValidation;
@@ -21,6 +21,8 @@ namespace Application.DependencyInjection
             services.AddValidatorsFromAssemblyContaining<CreateUserValidator>();
 
             services.AddScoped<IValidationService, ValidationService>();
+
+            
             return services;
         }
     }

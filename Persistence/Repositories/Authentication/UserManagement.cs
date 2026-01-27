@@ -1,10 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Threading.Tasks;
+using Application.Services.Interfaces.Logging;
 using Domain.Entities.Identity;
 using Domain.Interfaces.Authentication;
 using Microsoft.AspNetCore.Identity;
@@ -12,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Persistence.Repositories.Authentication
 {
-    public class UserManagement(IRoleManagement roleManagement, UserManager<User> userManager, FifeNDbContext dbContext) : IUserManagement
+    public class UserManagement(IRoleManagement roleManagement, UserManager<User> userManager, SignInManager<User> signInManager, IAppLogger<UserManagement> logger, FifeNDbContext dbContext) : IUserManagement
     {
         public async Task<bool> CreateUserAsync(User user, string password)
         {
@@ -43,35 +39,47 @@ namespace Persistence.Repositories.Authentication
             return user!;
         }
 
-        public async Task<List<Claim>> GetUserClaimsAsync(string userEmail)
+        public async Task<List<Claim>> GetUserClaimsAsync(User user)
         {
-            var _user = await GetUserByEmailAsync(userEmail);
-            string? roleName = await roleManagement.GetUserRoleAsync(_user!.Email!);
-            List<Claim> claims = [
+            if (user == null)
+                throw new ArgumentNullException(nameof(user));
+            
+            var claims = new List<Claim>
+            {
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim("FullName", _user.UserName!),
-                new Claim(ClaimTypes.NameIdentifier, _user.Id),
-                new Claim(ClaimTypes.Email, _user.Email!),
-                new Claim(ClaimTypes.Role, roleName!)
-            ];
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(ClaimTypes.Email, user.Email!),
+                new Claim("FullName", user.UserName ?? string.Empty)
+            };
+            var role = await userManager.GetRolesAsync(user);
+            if (role.Count != 1)
+            {
+                 logger.LogWarning(
+                    $"User {user.Id} has invalid role count: {role.Count}"
+                );
+                return new List<Claim>();
+            }
+            claims.Add(new Claim(ClaimTypes.Role, role.First()));
             return claims;
         }
 
-        public async Task<bool> LoginUserAsync(User user)
+        public async Task<User?> LoginUserAsync(string email, string password)
         {
-            var _user = await GetUserByEmailAsync(user.Email!);
-            if (_user is null) return false;
-            string? roleName = await roleManagement.GetUserRoleAsync(user.Email!);
-            if (string.IsNullOrEmpty(roleName)) return false;
-            return await userManager.CheckPasswordAsync(_user, user.PasswordHash!);
-
+            var _user = await GetUserByEmailAsync(email);
+            if (_user is null) return null;
+            var roleName = await roleManagement.GetUserRoleAsync(_user.Email!);
+            if (roleName == null) return null;
+            var result = await signInManager.CheckPasswordSignInAsync(_user, password, lockoutOnFailure: false);
+            return result.Succeeded ? _user : null;
         }
 
-        public async Task<int> RemoveUserByEmailAsync(string email)
+        public async Task<bool> RemoveUserByEmailAsync(string email)
         {
-            var _user = await dbContext.Users.FirstOrDefaultAsync(u => u.Email == email);
-            dbContext.Users.Remove(_user!);
-            return await dbContext.SaveChangesAsync() > 0 ? 1 : 0;
+            var user = await userManager.FindByEmailAsync(email);
+            if (user == null)
+                return false;
+            var result = await userManager.DeleteAsync(user);
+            return result.Succeeded;
         }
     }
 }
