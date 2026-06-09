@@ -10,12 +10,37 @@
     <ProjectReference Include="..\Domain\Domain.csproj" />
   </ItemGroup>
 
+  <!--
+    Parked legacy DTOs/validators/services/mapping built on the replaced Shop/Order/email-password
+    model. Kept on disk; re-introduced per spec under Modules/ as later phases land.
+  -->
   <ItemGroup>
-    <PackageReference Include="AutoMapper" Version="12.0.1" />
-    <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.1" />
-    <PackageReference Include="FluentValidation" Version="12.1.1" />
-    <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+    <Compile Remove="Services\Implementations\**\*.cs" />
+    <Compile Remove="Services\Interfaces\IProductService.cs" />
+    <Compile Remove="Services\Interfaces\ICategoryService.cs" />
+    <Compile Remove="Services\Interfaces\IShopService.cs" />
+    <Compile Remove="Services\Interfaces\IOrderService.cs" />
+    <Compile Remove="Services\Interfaces\IReviewService.cs" />
+    <Compile Remove="Services\Interfaces\Authentication\**\*.cs" />
+    <Compile Remove="DTOs\Product\**\*.cs" />
+    <Compile Remove="DTOs\Category\**\*.cs" />
+    <Compile Remove="DTOs\Shop\**\*.cs" />
+    <Compile Remove="DTOs\Order\**\*.cs" />
+    <Compile Remove="DTOs\Review\**\*.cs" />
+    <Compile Remove="DTOs\Vendor\**\*.cs" />
+    <Compile Remove="DTOs\Identity\**\*.cs" />
+    <Compile Remove="DTOs\LoginResponse.cs" />
+    <Compile Remove="Validators\Product\**\*.cs" />
+    <Compile Remove="Validators\Category\**\*.cs" />
+    <Compile Remove="Validators\Authentication\**\*.cs" />
+    <Compile Remove="Mapping\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.AspNetCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Resend" />
   </ItemGroup>
 
 </Project>

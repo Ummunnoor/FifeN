@@ -4,7 +4,9 @@ using System.Collections.Generic;
 namespace Application.DTOs.Product
 {
     public class CreateProductDTO : BaseProductDTO
-    {}
+    {
+        public Guid ShopId { get; set; }
+    }
 
     // DTO for product attribute
     public class ProductAttributeDTO

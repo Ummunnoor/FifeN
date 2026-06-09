@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Application.Exceptions;
 using Application.Services.Interfaces;
-using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 

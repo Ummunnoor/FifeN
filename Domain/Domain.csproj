@@ -6,10 +6,25 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!--
+    Parked (BRD v2.1: discovery-only MVP). The legacy Shop/Order/Payment model and its
+    supporting interfaces are superseded by the VendorProfile-centric model. Kept on disk for a
+    future payments/logistics phase but excluded from compilation so they do not collide with the
+    new Catalog entities or pull dead code into the graph.
+  -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.3.9" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="9.0.0" />
+    <Compile Remove="Entities\Product\**\*.cs" />
+    <Compile Remove="Entities\Payment\**\*.cs" />
+    <Compile Remove="Interfaces\Vendor\**\*.cs" />
+    <Compile Remove="Entities\Identity\VendorRequest.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Stores" />
+    <!-- Provides NpgsqlTsVector for the full-text SearchVector column on Product. -->
+    <PackageReference Include="Npgsql" />
   </ItemGroup>
 
 </Project>

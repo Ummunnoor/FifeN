@@ -1,0 +1,44 @@
+namespace Domain.Entities.Enums
+{
+    /// <summary>The 36 states of Nigeria plus the Federal Capital Territory (Fct).</summary>
+    public enum NigerianState
+    {
+        Abia,
+        Adamawa,
+        AkwaIbom,
+        Anambra,
+        Bauchi,
+        Bayelsa,
+        Benue,
+        Borno,
+        CrossRiver,
+        Delta,
+        Ebonyi,
+        Edo,
+        Ekiti,
+        Enugu,
+        Fct,
+        Gombe,
+        Imo,
+        Jigawa,
+        Kaduna,
+        Kano,
+        Katsina,
+        Kebbi,
+        Kogi,
+        Kwara,
+        Lagos,
+        Nasarawa,
+        Niger,
+        Ogun,
+        Ondo,
+        Osun,
+        Oyo,
+        Plateau,
+        Rivers,
+        Sokoto,
+        Taraba,
+        Yobe,
+        Zamfara
+    }
+}

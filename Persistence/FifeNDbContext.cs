@@ -1,37 +1,55 @@
-using System;
-using Domain.Entities;
+using Domain.Entities.Catalog;
 using Domain.Entities.Identity;
-using Domain.Entities.Product;
+using Domain.Entities.Interactions;
+using Domain.Entities.Notifications;
+using Domain.Entities.Reviews;
+using Domain.Entities.TrustSafety;
+using Domain.Entities.Vendors;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Persistence
 {
-    public class FifeNDbContext : IdentityDbContext<User>
+    /// <summary>
+    /// The single application <see cref="DbContext"/> for the TradeNaija modular monolith. Identity is
+    /// keyed by <see cref="System.Guid"/>; entity mappings live in <c>Persistence/Configurations</c> and
+    /// are applied by assembly scan.
+    /// </summary>
+    public class FifeNDbContext(DbContextOptions<FifeNDbContext> options)
+        : IdentityDbContext<User, IdentityRole<Guid>, Guid>(options)
     {
-        public FifeNDbContext(DbContextOptions<FifeNDbContext> options) : base(options)
-        {
-            
-        }
-        public DbSet<Product> Products { get; set; } = null!;
-        public DbSet<Category> Categories { get; set; } = null!;
-        public DbSet<ProductAttribute> Attributes { get; set; } = null!;
-        public DbSet<RefreshToken> RefreshTokens { get; set; } = null!;
-        public DbSet<VendorRequest> VendorRequests { get; set; } = null!;
+        // Identity & access
+        public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+        public DbSet<PhoneVerification> PhoneVerifications => Set<PhoneVerification>();
+
+        // Vendors & verification
+        public DbSet<VendorProfile> VendorProfiles => Set<VendorProfile>();
+        public DbSet<VendorRequest> VendorRequests => Set<VendorRequest>();
+
+        // Catalog
+        public DbSet<Category> Categories => Set<Category>();
+        public DbSet<Product> Products => Set<Product>();
+        public DbSet<ProductImage> ProductImages => Set<ProductImage>();
+
+        // Engagement
+        public DbSet<Interaction> Interactions => Set<Interaction>();
+        public DbSet<Review> Reviews => Set<Review>();
+
+        // Trust & safety
+        public DbSet<Report> Reports => Set<Report>();
+        public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+        // Notifications
+        public DbSet<Notification> Notifications => Set<Notification>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // citext powers case-insensitive unique business names.
+            modelBuilder.HasPostgresExtension("citext");
+
             base.OnModelCreating(modelBuilder);
-            modelBuilder.Entity<Product>()
-                .HasOne(x => x.Category)
-                .WithMany(x => x.Products)
-                .HasForeignKey(x => x.CategoryId);
-
-
-                modelBuilder.Entity<ProductAttribute>()
-                .HasOne(pa => pa.Product)
-                .WithMany(p => p.Attributes)
-                .HasForeignKey(pa => pa.ProductId);
+            modelBuilder.ApplyConfigurationsFromAssembly(typeof(FifeNDbContext).Assembly);
         }
     }
 }

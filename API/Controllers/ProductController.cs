@@ -1,50 +1,82 @@
-using Application.DTOs;
-using Application.DTOs.Product;
-using Application.Services.Interfaces.IProductService;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Application.Abstractions;
+using Application.Modules.Catalog.DTOs;
+using Application.Modules.Catalog.Services.Interfaces;
+using Application.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers
 {
+    /// <summary>Vendor listing management and public listing detail.</summary>
     [ApiController]
-    [Route("api/[controller]")]
-    public class ProductController : ControllerBase
+    [Route("api/v1/products")]
+    public class ProductController(IProductService products, ICurrentUserService currentUser) : ControllerBase
     {
-        private readonly IProductService _productService;
-        public ProductController(IProductService productService)
+        /// <summary>Creates a listing (approved vendors only).</summary>
+        [HttpPost]
+        [Authorize(Policy = "RequireVendor")]
+        public async Task<ActionResult<ProductDetail>> Create([FromBody] CreateProductRequest request, CancellationToken ct)
         {
-            _productService = productService;
-        }
-        [HttpGet("get-all-products")]
-        public async Task<BaseResponse<IEnumerable<GetProductDTO>>> GetAllProducts()
-        {
-            var products = await _productService.GetAllProductAsync();
-            return products;
+            var detail = await products.CreateAsync(currentUser.RequireUserId(), request, ct);
+            return CreatedAtAction(nameof(GetById), new { id = detail.Id }, detail);
         }
 
-        [HttpGet("get-product/{id}")]
-        public async Task<BaseResponse<GetProductDTO>> GetProductById(Guid id)
+        /// <summary>Updates a listing (owner only).</summary>
+        [HttpPut("{id:guid}")]
+        [Authorize(Policy = "RequireVendor")]
+        public async Task<ActionResult<ProductDetail>> Update(Guid id, [FromBody] UpdateProductRequest request, CancellationToken ct) =>
+            Ok(await products.UpdateAsync(currentUser.RequireUserId(), id, request, ct));
+
+        /// <summary>Changes a listing's status (owner only).</summary>
+        [HttpPatch("{id:guid}/status")]
+        [Authorize(Policy = "RequireVendor")]
+        public async Task<IActionResult> ChangeStatus(Guid id, [FromBody] ChangeStatusRequest request, CancellationToken ct)
         {
-            var product = await _productService.GetProductByIdAsync(id);
-            return product;
+            await products.ChangeStatusAsync(currentUser.RequireUserId(), id, request, ct);
+            return Ok();
         }
 
-        [HttpPost("create-product")]
-        public async Task<BaseResponse<GetProductDTO>> CreateProduct([FromBody] CreateProductDTO createProductDTO)
+        /// <summary>Soft-deletes (archives) a listing. Owners or admins.</summary>
+        [HttpDelete("{id:guid}")]
+        [Authorize]
+        public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
         {
-            var product = await _productService.CreateProductAsync(createProductDTO);
-            return product;
+            await products.DeleteAsync(currentUser.RequireUserId(), currentUser.IsAdmin, id, ct);
+            return NoContent();
         }
-        [HttpPut("update-product")]
-        public async Task<BaseResponse<GetProductDTO>> UpdateProduct([FromBody] UpdateProductDTO updateProductDTO)
+
+        /// <summary>Uploads 1–5 images (JPEG/PNG/WebP, ≤5MB each) to a listing (owner only).</summary>
+        [HttpPost("{id:guid}/images")]
+        [Authorize(Policy = "RequireVendor")]
+        [RequestSizeLimit(30 * 1024 * 1024)]
+        public async Task<ActionResult<IReadOnlyList<string>>> UploadImages(
+            Guid id, [FromForm] List<IFormFile> files, CancellationToken ct)
         {
-            var product = await _productService.UpdateProductAsync(updateProductDTO);
-            return product;
+            var uploads = files.Select(f =>
+                new ImageUpload(f.OpenReadStream(), f.FileName, f.ContentType, f.Length)).ToList();
+
+            try
+            {
+                var urls = await products.AddImagesAsync(currentUser.RequireUserId(), id, uploads, ct);
+                return Created($"/api/v1/products/{id}", urls);
+            }
+            finally
+            {
+                // Dispose the request streams even when validation/upload throws.
+                foreach (var upload in uploads)
+                    upload.Content.Dispose();
+            }
         }
-        [HttpDelete("delete-product/{id}")]
-        public async Task<BaseResponse<bool>> DeleteProduct([FromRoute] Guid id)
-        {
-            var result = await _productService.DeleteProductAsync(new DeleteProductDTO { Id = id });
-            return result;
-        }
+
+        /// <summary>Public listing detail. Increments the view count; hidden listings return 404.</summary>
+        [HttpGet("{id:guid}")]
+        [AllowAnonymous]
+        public async Task<ActionResult<ProductDetail>> GetById(Guid id, CancellationToken ct) =>
+            Ok(await products.GetPublicDetailAsync(id, ct));
     }
 }

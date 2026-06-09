@@ -2,7 +2,10 @@ using Application.DTOs;
 using Application.DTOs.Product;
 using Application.Services.Interfaces;
 using AutoMapper;
+using Domain.Entities.Identity;
 using Domain.Entities.Product;
+using Domain.Interfaces.Vendor;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -12,19 +15,22 @@ namespace Application.Services.Implementations
     {
         private readonly IGeneric<Product> _productRepository;
         private readonly IGeneric<Category> _categoryRepository;
+        private readonly IShopManagement _shopManagement;
+        private readonly ICurrentUserService _currentUser;
         private readonly IMapper _mapper;
         private readonly ILogger<ProductService> _logger;
 
-        public ProductService(IGeneric<Product> productRepository,IGeneric<Category> categoryRepository,IMapper mapper,ILogger<ProductService> logger)
+        public ProductService(IGeneric<Product> productRepository, IGeneric<Category> categoryRepository, IShopManagement shopManagement, ICurrentUserService currentUser, IMapper mapper, ILogger<ProductService> logger)
         {
             _productRepository = productRepository;
             _categoryRepository = categoryRepository;
+            _shopManagement = shopManagement;
+            _currentUser = currentUser;
             _mapper = mapper;
             _logger = logger;
         }
 
-        public async Task<BaseResponse<GetProductDTO>> CreateProductAsync(
-            CreateProductDTO createProductDTO)
+        public async Task<BaseResponse<GetProductDTO>> CreateProductAsync(CreateProductDTO createProductDTO)
         {
             _logger.LogInformation(
                 "Creating product. Name: {Name}, CategoryId: {CategoryId}",
@@ -48,8 +54,32 @@ namespace Application.Services.Implementations
                         Data: null);
                 }
             }
+                var userId = _currentUser.UserId;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    _logger.LogWarning("User not authenticated");
+
+                    return new BaseResponse<GetProductDTO>(
+                        Success: false,
+                        Message: "User not authenticated",
+                        Data: null);
+                }
+
+                var shop = await _shopManagement.GetByUserIdAsync(userId);
+                if (shop == null)
+                {
+                    _logger.LogWarning(
+                        "Shop not found. ShopId: {ShopId}",
+                        createProductDTO.ShopId);
+
+                    return new BaseResponse<GetProductDTO>(
+                        Success: false,
+                        Message: "Shop not found",
+                        Data: null);
+                }
 
             var entity = _mapper.Map<Product>(createProductDTO);
+            entity.ShopId = shop.Id;
             var createdProduct = await _productRepository.AddAsync(entity);
 
             _logger.LogInformation(

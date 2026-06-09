@@ -1,115 +1,85 @@
-using System.Net;
-using System.Text.Json;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Application.Exceptions;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using Application.DTOs;
 
 namespace Persistence.Middleware
 {
-    public class ExceptionHandlingMiddleware
+    /// <summary>
+    /// Translates unhandled exceptions into RFC 7807 <see cref="ProblemDetails"/> responses. Expected
+    /// errors (<see cref="AppException"/>) map to their declared status; known Postgres violations map to
+    /// 409/400; everything else is a 500 (with detail hidden outside Development).
+    /// </summary>
+    public class ExceptionHandlingMiddleware(
+        RequestDelegate next,
+        ILogger<ExceptionHandlingMiddleware> logger,
+        IHostEnvironment env)
     {
-        private readonly RequestDelegate _next;
-        private readonly ILogger<ExceptionHandlingMiddleware> _logger;
-
-        public ExceptionHandlingMiddleware(
-            RequestDelegate next,
-            ILogger<ExceptionHandlingMiddleware> logger)
-        {
-            _next = next;
-            _logger = logger;
-        }
-
         public async Task InvokeAsync(HttpContext context)
         {
             try
             {
-                await _next(context);
+                await next(context);
             }
-            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx)
+            catch (AppException ex)
             {
-                await HandlePostgresException(context, ex, pgEx);
+                await WriteProblemAsync(context, ex.StatusCode, ex.Title, ex.Message, ex.Errors);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                await WriteProblemAsync(context, StatusCodes.Status401Unauthorized, "Unauthorized", ex.Message);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg)
+            {
+                logger.LogWarning(ex, "Database constraint violation. SqlState: {SqlState}", pg.SqlState);
+                var (status, title) = pg.SqlState switch
+                {
+                    PostgresErrorCodes.UniqueViolation => (StatusCodes.Status409Conflict, "Conflict"),
+                    PostgresErrorCodes.ForeignKeyViolation => (StatusCodes.Status400BadRequest, "Invalid reference"),
+                    PostgresErrorCodes.NotNullViolation => (StatusCodes.Status400BadRequest, "Missing required field"),
+                    _ => (StatusCodes.Status500InternalServerError, "Database error")
+                };
+                await WriteProblemAsync(context, status, title, ProblemDetailFor(status));
             }
             catch (Exception ex)
             {
-                await HandleGenericException(context, ex);
+                logger.LogError(ex, "Unhandled exception. Path: {Path} {Method}", context.Request.Path, context.Request.Method);
+                var detail = env.IsDevelopment() ? ex.Message : "An unexpected error occurred.";
+                await WriteProblemAsync(context, StatusCodes.Status500InternalServerError, "Server error", detail);
             }
         }
 
-        private async Task HandlePostgresException(
-            HttpContext context,
-            DbUpdateException ex,
-            PostgresException pgEx)
+        private static string ProblemDetailFor(int status) => status switch
         {
-            context.Response.ContentType = "application/json";
+            StatusCodes.Status409Conflict => "A record with the same key already exists.",
+            StatusCodes.Status400BadRequest => "The request referenced invalid or missing data.",
+            _ => "A database error occurred."
+        };
 
-            HttpStatusCode statusCode;
-            string message;
-
-            _logger.LogError(pgEx,
-                "PostgreSQL error occurred. SqlState: {SqlState}",
-                pgEx.SqlState);
-
-            switch (pgEx.SqlState)
+        private static async Task WriteProblemAsync(
+            HttpContext context, int status, string title, string detail,
+            IReadOnlyDictionary<string, string[]>? errors = null)
+        {
+            var problem = new ProblemDetails
             {
-                case PostgresErrorCodes.UniqueViolation:
-                    statusCode = HttpStatusCode.Conflict;
-                    message = "A record with the same key already exists.";
-                    _logger.LogWarning(ex, "Unique constraint violation");
-                    break;
+                Status = status,
+                Title = title,
+                Detail = detail,
+                Type = $"https://httpstatuses.io/{status}"
+            };
+            problem.Extensions["traceId"] = context.TraceIdentifier;
+            if (errors is not null)
+                problem.Extensions["errors"] = errors;
 
-                case PostgresErrorCodes.ForeignKeyViolation:
-                    statusCode = HttpStatusCode.BadRequest;
-                    message = "Invalid reference to a related entity.";
-                    _logger.LogWarning(ex, "Foreign key constraint violation");
-                    break;
-
-                case PostgresErrorCodes.NotNullViolation:
-                    statusCode = HttpStatusCode.BadRequest;
-                    message = "A required field is missing.";
-                    _logger.LogWarning(ex, "Not-null constraint violation");
-                    break;
-
-                default:
-                    statusCode = HttpStatusCode.InternalServerError;
-                    message = "A database error occurred.";
-                    _logger.LogError(ex, "Unhandled PostgreSQL error");
-                    break;
-            }
-
-            await WriteResponse(context, statusCode, message);
-        }
-
-        private async Task HandleGenericException(HttpContext context, Exception ex)
-        {
-            _logger.LogError(ex,
-                "Unhandled exception. Path: {Path}, Method: {Method}, TraceId: {TraceId}",
-                context.Request.Path,
-                context.Request.Method,
-                context.TraceIdentifier);
-
-            await WriteResponse(
-                context,
-                HttpStatusCode.InternalServerError,
-                "An unexpected error occurred.");
-        }
-
-        private static async Task WriteResponse(
-            HttpContext context,
-            HttpStatusCode statusCode,
-            string message)
-        {
-            context.Response.StatusCode = (int)statusCode;
-
-            var response = new BaseResponse<object>(
-                Success: false,
-                Message: message,
-                Data: null
-            );
-
-            await context.Response.WriteAsync(
-                JsonSerializer.Serialize(response));
+            context.Response.StatusCode = status;
+            context.Response.ContentType = "application/problem+json";
+            await context.Response.WriteAsJsonAsync(problem, problem.GetType());
         }
     }
 }

@@ -50,3 +50,5 @@ artifacts/
 .nuget/
 nuget.exe
 NuGet.Config
+# IDE / build caches
+*.lscache

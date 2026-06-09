@@ -1,15 +1,16 @@
-using Application.Validators;
-using Application.Validators.Product;
-using FluentValidation;
-using FluentValidation.AspNetCore;
+using System;
+using System.Linq;
+using API.RateLimiting;
+using Application.DependencyInjection;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Persistence;
 using Persistence.DependencyInjection;
-using Application.DependencyInjection;
-using Serilog;
 using Persistence.Middleware;
-using Microsoft.AspNetCore.Identity;
 using Persistence.Repositories.Authentication;
+using Persistence.Seeding;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,91 +22,79 @@ Log.Logger = new LoggerConfiguration()
     .CreateLogger();
 
 builder.Host.UseSerilog();
-Log.Information("Application Starting Up");
+Log.Information("Application starting up");
 
 // ---------- Services ----------
-
-// Controllers
 builder.Services.AddControllers();
-
-// FluentValidation
-builder.Services.AddFluentValidationAutoValidation();
-builder.Services.AddValidatorsFromAssemblyContaining<CreateProductValidator>();
-builder.Services.AddScoped<IValidationService, ValidationService>();
-
-// DbContext
-builder.Services.AddDbContext<FifeNDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
-);
-
-// Swagger / OpenAPI
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Application & Persistence Services
 builder.Services.AddPersistenceServices(builder.Configuration);
 builder.Services.AddApplicationServices();
+builder.Services.AddApiRateLimiting();
 
-// CORS
+// Trust the hosting proxy's X-Forwarded-* headers so the real client IP (not the proxy's) drives
+// rate limiting and audit logging. KnownProxies/Networks are cleared because the proxy IP is not
+// fixed on managed hosts (e.g. Render); the platform is the only hop in front of the app.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        policy
-            .WithOrigins(
-                "http://localhost:5173",   // Vite
-                "http://localhost:3000"    // React
-            )
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
+    options.AddPolicy("AllowFrontend", policy => policy
+        .WithOrigins("http://localhost:5173", "http://localhost:3000")
+        .AllowAnyHeader()
+        .AllowAnyMethod());
 });
 
 var app = builder.Build();
 
 // ---------- Middleware ----------
-
-// Exception Handling
+app.UseForwardedHeaders();
+app.UseHttpsRedirection();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
-
-// CORS
 app.UseCors("AllowFrontend");
-
-// Serilog Request Logging
+app.UseRateLimiter();
 app.UseSerilogRequestLogging();
 
-// Swagger
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-// Authentication / Authorization
 app.UseAuthentication();
 app.UseAuthorization();
-
-// Controllers
 app.MapControllers();
 
-// ---------- Seed Roles Safely ----------
-
+// ---------- Startup data ----------
 using (var scope = app.Services.CreateScope())
 {
-    var roleManager = scope.ServiceProvider
-        .GetRequiredService<RoleManager<IdentityRole>>();
+    var services = scope.ServiceProvider;
 
+    if (app.Environment.IsDevelopment())
+        await services.GetRequiredService<FifeNDbContext>().Database.MigrateAsync();
+
+    var roleManager = services.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
     await RoleSeeder.SeedAsync(roleManager);
+
+    // Full demo dataset (founder/admins, categories, pilot vendors, listings, interactions, reviews):
+    // Development by default, Production only with an explicit --seed flag. Idempotent.
+    if (app.Environment.IsDevelopment() || args.Contains("--seed"))
+        await DbSeeder.SeedAsync(services);
 }
 
-// ---------- Run Application ----------
 try
 {
     app.Run();
 }
-catch (System.Exception ex)
+catch (Exception ex)
 {
-    Log.Logger.Error(ex, "Application start-up failed");
+    Log.Error(ex, "Application start-up failed");
 }
 finally
 {
