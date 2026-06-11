@@ -40,11 +40,38 @@ namespace Persistence.Seeding
                     await roles.CreateAsync(new IdentityRole<Guid>(role));
         }
 
+        // Fixed authenticator secret (Base32) shared by all seeded admins so the admin surface is
+        // reachable in demos/tests without a manual /auth/mfa/enroll round-trip. Add this secret to an
+        // authenticator app (issuer "TradeNaija") to generate the 6-digit TOTP codes the admins need at
+        // login. DEMO/DEV ONLY — a real deployment must enroll each admin with a per-user secret.
+        internal const string DemoAdminAuthenticatorKey = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+
+        // The internal token coordinates ASP.NET Identity uses to persist an authenticator key
+        // (AspNetUserTokens). There is no public setter that takes a value, so we write it directly.
+        private const string IdentityLoginProvider = "[AspNetUserStore]";
+        private const string AuthenticatorKeyTokenName = "AuthenticatorKey";
+
         private static async Task SeedAdminsAsync(UserManager<User> users)
         {
             await EnsureUserAsync(users, "+447928785373", "Khaleelah", "Founder", nameof(AppRole.Admin), isAdmin: true, isOwner: true);
             await EnsureUserAsync(users, "+2348070928156", "Sherif", "Akinyemi", nameof(AppRole.Admin), isAdmin: true);
             await EnsureUserAsync(users, "+2348071074683", "Raqeeb", "Akinyemi", nameof(AppRole.Admin), isAdmin: true);
+        }
+
+        /// <summary>
+        /// Enrolls a seeded admin with the shared demo authenticator key and enables 2FA, so OTP+TOTP
+        /// login and the amr=mfa gate work out of the box. Idempotent: only writes when the stored key
+        /// differs (which also backfills admins seeded before this enrollment existed).
+        /// </summary>
+        private static async Task EnsureAdminMfaAsync(UserManager<User> users, User user)
+        {
+            var current = await users.GetAuthenticatorKeyAsync(user);
+            if (current != DemoAdminAuthenticatorKey)
+                await users.SetAuthenticationTokenAsync(
+                    user, IdentityLoginProvider, AuthenticatorKeyTokenName, DemoAdminAuthenticatorKey);
+
+            if (!await users.GetTwoFactorEnabledAsync(user))
+                await users.SetTwoFactorEnabledAsync(user, true);
         }
 
         private static async Task<IReadOnlyDictionary<string, Category>> SeedCategoriesAsync(
@@ -230,7 +257,10 @@ namespace Persistence.Seeding
         {
             var existing = await users.Users.FirstOrDefaultAsync(u => u.PhoneNumber == phone);
             if (existing is not null)
+            {
+                if (isAdmin) await EnsureAdminMfaAsync(users, existing);
                 return existing;
+            }
 
             var user = new User
             {
@@ -258,6 +288,7 @@ namespace Persistence.Seeding
                     $"Failed to seed user {phone}: {string.Join("; ", result.Errors.Select(e => e.Description))}");
 
             await users.AddToRoleAsync(user, role);
+            if (isAdmin) await EnsureAdminMfaAsync(users, user);
             return user;
         }
     }

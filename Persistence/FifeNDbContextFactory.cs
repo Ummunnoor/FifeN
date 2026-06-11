@@ -10,9 +10,11 @@ namespace Persistence
             public FifeNDbContext CreateDbContext(string[] args)
             {
                 // Load appsettings.json from the API project
+                var apiProjectPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "API");
                 var configuration = new ConfigurationBuilder()
-                    .SetBasePath(Path.Combine(Directory.GetCurrentDirectory(), "..", "API"))
+                    .SetBasePath(apiProjectPath)
                     .AddJsonFile("appsettings.json")
+                    .AddJsonFile("appsettings.Development.json", optional: true)
                     .Build();
 
                 var connectionString = configuration.GetConnectionString("DefaultConnection");

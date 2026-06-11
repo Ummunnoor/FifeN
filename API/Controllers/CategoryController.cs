@@ -1,8 +1,3 @@
-using Application.DTOs;
-using Application.DTOs.Category;
-using Application.Services.Interfaces;
-using Microsoft.AspNetCore.Mvc;
-
 namespace API.Controllers
 {
     [ApiController]

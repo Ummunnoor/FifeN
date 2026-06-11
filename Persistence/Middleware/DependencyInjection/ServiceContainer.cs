@@ -1,4 +1,5 @@
 using System;
+using System.Security.Claims;
 using System.Text;
 using Application.Abstractions;
 using Application.Services.Interfaces;
@@ -139,6 +140,9 @@ namespace Persistence.DependencyInjection
                 .AddJwtBearer(options =>
                 {
                     options.SaveToken = true;
+                    // Pass claims through verbatim. The default handler rewrites short JWT claim names
+                    // (e.g. "amr") into long Microsoft URIs, which would break RequireClaim("amr","mfa").
+                    options.MapInboundClaims = false;
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidateIssuer = true,
@@ -149,7 +153,11 @@ namespace Persistence.DependencyInjection
                         ValidIssuer = configuration["Jwt:Issuer"],
                         ValidAudience = configuration["Jwt:Audience"],
                         ClockSkew = TimeSpan.Zero,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+                        // The token emits role under the standard ClaimTypes.Role URI; pin it so
+                        // RequireRole keeps working now that inbound mapping is off.
+                        RoleClaimType = ClaimTypes.Role,
+                        NameClaimType = ClaimTypes.NameIdentifier
                     };
                 });
         }
