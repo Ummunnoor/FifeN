@@ -2,9 +2,11 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Application.Abstractions;
+using Application.DTOs;
 using Application.Exceptions;
 using Application.Modules.Catalog.DTOs;
 using Application.Modules.Catalog.Services.Interfaces;
+using Application.Modules.Discovery.Services.Interfaces;
 using Domain.Entities.Catalog;
 using Domain.Entities.Enums;
 using Microsoft.Extensions.Logging;
@@ -14,11 +16,16 @@ namespace Application.Modules.Catalog.Services.Implementations
     /// <summary>Admin listing moderation: approve probation listings, hide, or remove. All audited.</summary>
     public class ProductAdminService(
         IProductRepository products,
+        IProductQueryRepository productQuery,
         IAuditLogger audit,
         INotificationService notifications,
         ILogger<ProductAdminService> logger) : IProductAdminService
     {
         private const int ProbationGraduationThreshold = 3;
+        private const int MaxPageSize = 50;
+
+        public Task<PagedResponse<ProductSummary>> GetModerationQueueAsync(int page, int pageSize, CancellationToken ct) =>
+            productQuery.PendingModerationAsync(Math.Max(page, 1), Math.Clamp(pageSize, 1, MaxPageSize), ct);
 
         public async Task ModerateAsync(
             Guid adminUserId, Guid productId, ModerateProductRequest request, string? ipAddress, CancellationToken ct)

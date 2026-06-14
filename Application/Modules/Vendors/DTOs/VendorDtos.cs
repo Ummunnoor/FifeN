@@ -45,5 +45,7 @@ namespace Application.Modules.Vendors.DTOs
         VerificationMethod Method,
         VerificationStatus VerificationStatus,
         bool NameMatch,
-        DateTimeOffset CreatedAtUtc);
+        DateTimeOffset CreatedAtUtc,
+        /// <summary>True when the applicant's account is currently suspended (drives Suspend vs Reinstate).</summary>
+        bool Suspended);
 }

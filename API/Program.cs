@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text.Json.Serialization;
 using API.RateLimiting;
 using Application.DependencyInjection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -16,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ---------- Serilog ----------
 Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", Serilog.Events.LogEventLevel.Warning)
     .Enrich.FromLogContext()
     .WriteTo.Console()
     .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day)
@@ -25,7 +27,11 @@ builder.Host.UseSerilog();
 Log.Information("Application starting up");
 
 // ---------- Services ----------
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    // Serialize enums as their string names (e.g. "Lagos", "Fixed") rather than integers, so the
+    // JSON contract matches the documented API (BACKEND_SPEC / FRONTEND_PDR) and typed clients.
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

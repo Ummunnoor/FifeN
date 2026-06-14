@@ -46,7 +46,8 @@ namespace Application.Modules.Catalog.DTOs
         Guid VendorId,
         string VendorName,
         bool VendorVerified,
-        double AverageRating);
+        double AverageRating,
+        ListingStatus Status);
 
     /// <summary>Full listing projection for the detail page.</summary>
     public record ProductDetail(
@@ -67,7 +68,9 @@ namespace Application.Modules.Catalog.DTOs
         double AverageRating,
         int ReviewCount,
         ListingStatus Status,
-        DateTimeOffset CreatedAtUtc);
+        DateTimeOffset CreatedAtUtc,
+        /// <summary>True when the authenticated caller owns this listing — UI hides the buyer CTAs.</summary>
+        bool IsOwnListing);
 
     /// <summary>Active category for selection and discovery.</summary>
     public record CategoryResponse(Guid Id, string Name, string Slug, bool IsConsumable);

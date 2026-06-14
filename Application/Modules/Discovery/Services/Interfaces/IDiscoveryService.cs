@@ -23,5 +23,11 @@ namespace Application.Modules.Discovery.Services.Interfaces
         Task<PagedResponse<ProductSummary>> SearchAsync(ProductQuery query, CancellationToken ct);
         Task<PagedResponse<ProductSummary>> NewThisWeekAsync(Guid? categoryId, int page, int pageSize, CancellationToken ct);
         Task<PagedResponse<ProductSummary>> ByVendorAsync(Guid vendorProfileId, int page, int pageSize, CancellationToken ct);
+
+        /// <summary>A vendor's own listings of <em>every</em> status (for their management dashboard), newest first.</summary>
+        Task<PagedResponse<ProductSummary>> MineByVendorAsync(Guid vendorProfileId, int page, int pageSize, CancellationToken ct);
+
+        /// <summary>Probation listings held as Unavailable, awaiting admin moderation. Oldest first (FIFO queue).</summary>
+        Task<PagedResponse<ProductSummary>> PendingModerationAsync(int page, int pageSize, CancellationToken ct);
     }
 }

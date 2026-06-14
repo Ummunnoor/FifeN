@@ -17,5 +17,12 @@ namespace Application.Abstractions
             string title,
             string body,
             CancellationToken ct = default);
+
+        /// <summary>Fans a notification out to every admin (e.g. new vendor request or listing to review).</summary>
+        Task NotifyAdminsAsync(
+            NotificationType type,
+            string title,
+            string body,
+            CancellationToken ct = default);
     }
 }

@@ -201,6 +201,30 @@ namespace Persistence.Seeding
             db.Products.AddRange(products);
             await db.SaveChangesAsync(ct);
 
+            // Attach placeholder gallery images (a cover + two more) to every seeded listing so grids
+            // and detail pages render with imagery out of the box. Deterministic per product via picsum.
+            var images = new List<ProductImage>();
+            foreach (var product in products)
+            {
+                var key = product.Id.ToString("N");
+                string[] suffixes = ["", "b", "c"];
+                for (var i = 0; i < suffixes.Length; i++)
+                {
+                    images.Add(new ProductImage
+                    {
+                        Id = Guid.CreateVersion7(),
+                        ProductId = product.Id,
+                        CloudinaryPublicId = $"seed/{key}-{i}",
+                        Url = $"https://picsum.photos/seed/{key}{suffixes[i]}/800/600",
+                        IsCover = i == 0,
+                        SortOrder = i,
+                        CreatedAtUtc = now
+                    });
+                }
+            }
+            db.ProductImages.AddRange(images);
+            await db.SaveChangesAsync(ct);
+
             var ngozi = buyers[0];
             var tunde = buyers[1];
 

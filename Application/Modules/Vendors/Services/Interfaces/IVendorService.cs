@@ -23,7 +23,7 @@ namespace Application.Modules.Vendors.Services.Interfaces
             VendorRequestStatus status, int page, int pageSize, CancellationToken ct);
         Task ApproveAsync(Guid adminUserId, Guid requestId, string? ipAddress, CancellationToken ct);
         Task RejectAsync(Guid adminUserId, Guid requestId, RejectionReason reason, string? ipAddress, CancellationToken ct);
-        Task SuspendAsync(Guid adminUserId, Guid vendorProfileId, string reason, string? ipAddress, CancellationToken ct);
-        Task ReinstateAsync(Guid adminUserId, Guid vendorProfileId, string? ipAddress, CancellationToken ct);
+        Task SuspendAsync(Guid adminUserId, Guid vendorUserId, string reason, string? ipAddress, CancellationToken ct);
+        Task ReinstateAsync(Guid adminUserId, Guid vendorUserId, string? ipAddress, CancellationToken ct);
     }
 }

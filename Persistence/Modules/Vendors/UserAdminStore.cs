@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,6 +31,18 @@ namespace Persistence.Modules.Vendors
             db.Users
                 .Where(u => u.Id == userId)
                 .ExecuteUpdateAsync(s => s.SetProperty(u => u.Status, status), ct);
+
+        public async Task<IReadOnlyDictionary<Guid, UserStatus>> GetStatusesAsync(
+            IReadOnlyCollection<Guid> userIds, CancellationToken ct)
+        {
+            if (userIds.Count == 0)
+                return new Dictionary<Guid, UserStatus>();
+
+            return await db.Users
+                .AsNoTracking()
+                .Where(u => userIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.Status, ct);
+        }
 
         public Task<bool> IsVendorAsync(Guid userId, CancellationToken ct) =>
             db.Users.AnyAsync(u => u.Id == userId && u.IsVendor, ct);

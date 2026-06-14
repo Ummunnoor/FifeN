@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Application.Abstractions;
+using Application.DTOs;
 using Application.Modules.Catalog.DTOs;
 using Application.Modules.Catalog.Services.Interfaces;
 using Application.Services.Interfaces;
@@ -72,6 +73,13 @@ namespace API.Controllers
                     upload.Content.Dispose();
             }
         }
+
+        /// <summary>The authenticated vendor's own listings (all statuses) for their management dashboard.</summary>
+        [HttpGet("mine")]
+        [Authorize(Policy = "RequireVendor")]
+        public async Task<ActionResult<PagedResponse<ProductSummary>>> Mine(
+            [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
+            Ok(await products.GetMyListingsAsync(currentUser.RequireUserId(), page, pageSize, ct));
 
         /// <summary>Public listing detail. Increments the view count; hidden listings return 404.</summary>
         [HttpGet("{id:guid}")]

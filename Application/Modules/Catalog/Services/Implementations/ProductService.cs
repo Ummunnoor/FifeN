@@ -4,10 +4,13 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Application.Abstractions;
+using Application.DTOs;
 using Application.Exceptions;
 using Application.Modules.Catalog.DTOs;
 using Application.Modules.Catalog.Services.Interfaces;
+using Application.Modules.Discovery.Services.Interfaces;
 using Application.Modules.Vendors.Services.Interfaces;
+using Application.Services.Interfaces;
 using Domain.Entities.Catalog;
 using Domain.Entities.Enums;
 using Domain.Entities.Vendors;
@@ -21,10 +24,14 @@ namespace Application.Modules.Catalog.Services.Implementations
         IProductRepository products,
         ICategoryRepository categories,
         IVendorRepository vendors,
+        IProductQueryRepository productQuery,
         IImageStorageService imageStorage,
+        ICurrentUserService currentUser,
+        INotificationService notifications,
         ILogger<ProductService> logger) : IProductService
     {
         private const int MaxActiveListings = 50;
+        private const int MaxPageSize = 50;
         private const int MaxImages = 5;
         private const long MaxImageBytes = 5 * 1024 * 1024;
         private static readonly HashSet<string> AllowedImageTypes =
@@ -63,7 +70,21 @@ namespace Application.Modules.Catalog.Services.Implementations
             logger.LogInformation("Listing {ProductId} created by vendor {VendorId} (status {Status}).",
                 product.Id, vendor.Id, product.Status);
 
+            // Probation vendors' listings are held as Unavailable pending moderation — alert admins.
+            if (product.Status != ListingStatus.Live)
+                await notifications.NotifyAdminsAsync(NotificationType.NewListingForReview,
+                    "Listing awaiting review",
+                    $"\"{product.Title}\" from {vendor.BusinessName} needs moderation before going live.", ct);
+
             return ToDetail(product, vendor, category.Name, imageUrls: [], average: 0, reviewCount: 0);
+        }
+
+        public async Task<PagedResponse<ProductSummary>> GetMyListingsAsync(
+            Guid userId, int page, int pageSize, CancellationToken ct)
+        {
+            var vendor = await RequireVendor(userId, ct);
+            return await productQuery.MineByVendorAsync(
+                vendor.Id, Math.Max(page, 1), Math.Clamp(pageSize, 1, MaxPageSize), ct);
         }
 
         public async Task<ProductDetail> UpdateAsync(
@@ -258,13 +279,14 @@ namespace Application.Modules.Catalog.Services.Implementations
         private static IReadOnlyList<string> ImageUrls(Product product) =>
             product.Images.OrderBy(i => i.SortOrder).Select(i => i.Url).ToList();
 
-        private static ProductDetail ToDetail(
+        private ProductDetail ToDetail(
             Product p, VendorProfile vendor, string categoryName,
             IReadOnlyList<string> imageUrls, double average, int reviewCount) =>
             new(
                 p.Id, p.Title, p.Description, p.Price.Amount, p.Price.Currency, p.PriceType, p.Condition,
                 categoryName, p.Location.State, p.Location.City, imageUrls,
                 vendor.Id, vendor.BusinessName, vendor.VerificationStatus == VerificationStatus.Verified,
-                average, reviewCount, p.Status, p.CreatedAtUtc);
+                average, reviewCount, p.Status, p.CreatedAtUtc,
+                IsOwnListing: currentUser.UserId is { } uid && uid == vendor.UserId);
     }
 }

@@ -40,6 +40,12 @@ namespace Application.Modules.Engagement.Services.Implementations
                 throw new ConflictException("This listing is not currently available.");
 
             var vendor = product.Vendor;
+
+            // A vendor can't be a lead on their own listing — it would corrupt lead counts, the
+            // cross-discovery metric, and review eligibility (and produces a wa.me link to oneself).
+            if (vendor.UserId == buyerUserId)
+                throw new BusinessRuleException("You cannot express interest in your own listing.");
+
             var message = string.IsNullOrWhiteSpace(request.Message) ? null : request.Message.Trim();
             var offer = request.OfferPrice;
 

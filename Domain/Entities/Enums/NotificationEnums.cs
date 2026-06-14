@@ -11,7 +11,9 @@ namespace Domain.Entities.Enums
         NewLead,
         ReviewNudge,
         NewInCategory,
-        Security
+        Security,
+        NewVendorRequest,
+        NewListingForReview
     }
 
     /// <summary>Delivery channel for a notification. In-app is always recorded; WhatsApp preferred for push.</summary>

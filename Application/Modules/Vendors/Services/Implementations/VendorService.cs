@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Application.Abstractions;
 using Application.Exceptions;
 using Application.Modules.Identity;
 using Application.Modules.Vendors.DTOs;
@@ -16,6 +17,7 @@ namespace Application.Modules.Vendors.Services.Implementations
         IVendorRepository vendors,
         IUserAdminStore users,
         IIdentityVerificationService kyc,
+        INotificationService notifications,
         ILogger<VendorService> logger) : IVendorService
     {
         public async Task<VendorRequestResponse> SubmitRequestAsync(
@@ -58,6 +60,9 @@ namespace Application.Modules.Vendors.Services.Implementations
 
             await vendors.AddRequestAsync(vendorRequest, ct);
             logger.LogInformation("Vendor request {RequestId} submitted by {UserId}.", vendorRequest.Id, userId);
+
+            await notifications.NotifyAdminsAsync(NotificationType.NewVendorRequest,
+                "New vendor request", $"\"{businessName}\" has applied to become a vendor.", ct);
 
             return ToResponse(vendorRequest);
         }

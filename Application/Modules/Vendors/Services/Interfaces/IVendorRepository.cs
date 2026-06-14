@@ -35,6 +35,7 @@ namespace Application.Modules.Vendors.Services.Interfaces
     {
         Task GrantVendorAsync(Guid userId, CancellationToken ct);
         Task SetStatusAsync(Guid userId, UserStatus status, CancellationToken ct);
+        Task<IReadOnlyDictionary<Guid, UserStatus>> GetStatusesAsync(IReadOnlyCollection<Guid> userIds, CancellationToken ct);
         Task<bool> IsVendorAsync(Guid userId, CancellationToken ct);
         Task<string?> GetDisplayNameAsync(Guid userId, CancellationToken ct);
     }

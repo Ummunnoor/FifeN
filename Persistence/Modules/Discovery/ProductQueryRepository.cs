@@ -33,7 +33,8 @@ namespace Persistence.Modules.Discovery
             p.Vendor.Id,
             p.Vendor.BusinessName,
             p.Vendor.VerificationStatus == VerificationStatus.Verified,
-            p.Reviews.Select(r => (double?)r.Rating).Average() ?? 0d);
+            p.Reviews.Select(r => (double?)r.Rating).Average() ?? 0d,
+            p.Status);
 
         private IQueryable<Product> VisibleListings() =>
             db.Products
@@ -93,6 +94,29 @@ namespace Persistence.Modules.Discovery
             var listings = VisibleListings()
                 .Where(p => p.VendorProfileId == vendorProfileId)
                 .OrderByDescending(p => p.CreatedAtUtc);
+            return PageAsync(listings, page, pageSize, ct);
+        }
+
+        public Task<PagedResponse<ProductSummary>> MineByVendorAsync(
+            Guid vendorProfileId, int page, int pageSize, CancellationToken ct)
+        {
+            // Management view: every status the vendor still manages (Live, Unavailable/probation, Removed),
+            // newest first. Archived is the vendor's own soft-delete, so it is hidden from the list.
+            var listings = db.Products
+                .AsNoTracking()
+                .Where(p => p.VendorProfileId == vendorProfileId && p.Status != ListingStatus.Archived)
+                .OrderByDescending(p => p.CreatedAtUtc);
+            return PageAsync(listings, page, pageSize, ct);
+        }
+
+        public Task<PagedResponse<ProductSummary>> PendingModerationAsync(int page, int pageSize, CancellationToken ct)
+        {
+            // Probation vendors' listings are created/edited into Unavailable for pre-moderation. Trusted
+            // vendors' Unavailable listings are self-hidden and not part of the review queue.
+            var listings = db.Products
+                .AsNoTracking()
+                .Where(p => p.Status == ListingStatus.Unavailable && p.Vendor.TrustTier != TrustTier.Trusted)
+                .OrderBy(p => p.CreatedAtUtc);
             return PageAsync(listings, page, pageSize, ct);
         }
 

@@ -25,9 +25,11 @@ namespace Application.Modules.Vendors.Services.Implementations
             VendorRequestStatus status, int page, int pageSize, CancellationToken ct)
         {
             var requests = await vendors.GetRequestsByStatusAsync(status, page, pageSize, ct);
+            var statuses = await users.GetStatusesAsync(requests.Select(r => r.UserId).ToList(), ct);
             return requests.Select(r => new VendorRequestQueueItem(
                 r.Id, r.UserId, r.BusinessName, r.VerificationMethod,
-                r.VerificationStatus, r.NameMatch, r.CreatedAtUtc)).ToList();
+                r.VerificationStatus, r.NameMatch, r.CreatedAtUtc,
+                Suspended: statuses.TryGetValue(r.UserId, out var s) && s == UserStatus.Suspended)).ToList();
         }
 
         public async Task ApproveAsync(Guid adminUserId, Guid requestId, string? ipAddress, CancellationToken ct)
@@ -84,9 +86,9 @@ namespace Application.Modules.Vendors.Services.Implementations
         }
 
         public async Task SuspendAsync(
-            Guid adminUserId, Guid vendorProfileId, string reason, string? ipAddress, CancellationToken ct)
+            Guid adminUserId, Guid vendorUserId, string reason, string? ipAddress, CancellationToken ct)
         {
-            var profile = await vendors.GetProfileAsync(vendorProfileId, ct)
+            var profile = await vendors.GetProfileByUserAsync(vendorUserId, ct)
                 ?? throw new NotFoundException("Vendor not found.");
 
             await users.SetStatusAsync(profile.UserId, UserStatus.Suspended, ct);
@@ -96,9 +98,9 @@ namespace Application.Modules.Vendors.Services.Implementations
                 "Account suspended", $"Your vendor account has been suspended. Reason: {reason}.", ct);
         }
 
-        public async Task ReinstateAsync(Guid adminUserId, Guid vendorProfileId, string? ipAddress, CancellationToken ct)
+        public async Task ReinstateAsync(Guid adminUserId, Guid vendorUserId, string? ipAddress, CancellationToken ct)
         {
-            var profile = await vendors.GetProfileAsync(vendorProfileId, ct)
+            var profile = await vendors.GetProfileByUserAsync(vendorUserId, ct)
                 ?? throw new NotFoundException("Vendor not found.");
 
             await users.SetStatusAsync(profile.UserId, UserStatus.Active, ct);
