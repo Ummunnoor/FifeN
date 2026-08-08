@@ -1,9 +1,5 @@
 using System.Security.Claims;
-using Application.DTOs;
-using Application.DTOs.Shop;
-using Application.Services.Interfaces;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+
 
 namespace API.Controllers
 {

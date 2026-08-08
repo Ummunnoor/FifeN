@@ -1,5 +1,3 @@
-using System;
-using Domain.Entities.Enums;
 
 namespace Application.DTOs.Order
 {

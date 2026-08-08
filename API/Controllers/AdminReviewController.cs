@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using Application.Modules.Engagement.DTOs;
 using Application.Modules.Engagement.Services.Interfaces;
 using Application.Services.Interfaces;

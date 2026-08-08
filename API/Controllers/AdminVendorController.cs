@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Application.Modules.Vendors.DTOs;
 using Application.Modules.Vendors.Services.Interfaces;
 using Application.Services.Interfaces;

@@ -1,5 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
 using Application.Modules.Admin.DTOs;
 using Application.Modules.Admin.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Application.DTOs;
 using Application.Modules.Catalog.DTOs;
 using Application.Modules.Discovery.DTOs;

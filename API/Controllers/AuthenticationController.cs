@@ -1,14 +1,3 @@
-using System.Text;
-using Application.DTOs.Identity;
-using Application.Services.Interfaces;
-using Domain.Entities.Identity;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.UI.Services;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.EntityFrameworkCore;
-
 namespace API.Controllers
 {
     [ApiController]
