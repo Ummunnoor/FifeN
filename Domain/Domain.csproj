@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -25,6 +25,8 @@
     <PackageReference Include="Microsoft.Extensions.Identity.Stores" />
     <!-- Provides NpgsqlTsVector for the full-text SearchVector column on Product. -->
     <PackageReference Include="Npgsql" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <PackageReference Include="System.Security.Cryptography.Xml" />
   </ItemGroup>
 
 </Project>

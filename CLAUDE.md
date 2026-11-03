@@ -19,12 +19,12 @@ dotnet ef database update --project Persistence --startup-project API
 
 ## Project Overview
 
-FifeN is the backend for **TradeNaija**, a WhatsApp-first discovery marketplace for Nigeria, built
-with .NET 9 in a clean 4-layer architecture. The current codebase implements the TradeNaija MVP per
+FifeN is the backend for **Trade9ja**, an in-app-chat discovery marketplace for Nigeria, built
+with .NET 10 in a clean 4-layer architecture. The current codebase implements the TradeNaija MVP per
 the specs at the repo root — **`BACKEND_SPEC.md` is the implementation source of truth** (entities §1,
 EF config §2, endpoints §3, authz §4), with `BRD.md` and `ARCHITECTURE.md` for product/design context.
 
-MVP scope: phone+OTP auth, vendor onboarding/KYC, catalog, discovery/search, interactions (leads),
+MVP scope: email OTP auth with optional Google sign-in, vendor onboarding/KYC, catalog, discovery/search, interactions (leads),
 reviews, reports/trust-safety, admin dashboard, and notifications. **Payments, Shop, and Order are
 out of MVP** — that legacy code is parked (excluded from compilation via `<Compile Remove>` in the
 `.csproj` files, kept on disk), not deleted.
@@ -59,8 +59,8 @@ The Application layer defines infrastructure **ports** it depends on; Persistenc
 **adapters**. Cross-cutting ports live in `Application/Abstractions/` (`ISecureHasher`,
 `IImageStorageService`, `INotificationService`, `IAuditLogger`); module-specific ports live alongside
 the module's interfaces (e.g. Identity's `ITokenService`, `IRefreshTokenStore`, `IUserAccountStore`,
-`IPhoneVerificationStore`, `IOtpSender`). Several adapters are dev stubs to be swapped for real
-integrations: `LoggingOtpSender` (→ Termii SMS), `DevImageStorageService` (→ Cloudinary),
+`IEmailVerificationStore`, `IEmailOtpSender`). Integrations include Brevo email delivery,
+`DevImageStorageService` (→ Cloudinary),
 `DevIdentityVerificationService` (→ real KYC).
 
 ### Key patterns
@@ -80,15 +80,31 @@ integrations: `LoggingOtpSender` (→ Termii SMS), `DevImageStorageService` (→
 
 ### Auth flow
 
-**Phone + OTP only** — there are no passwords and no email confirmation (the old email/password
-Identity stack was replaced). `AuthenticationService` owns the OTP lifecycle (rate limits, 5-min
-expiry, attempt lockout, rotation); `TokenService` issues JWTs (claims include `is_owner`/`is_vendor`/
-`is_admin`); refresh tokens are persisted via `RefreshTokenStore`. Endpoints: `api/v1/auth`
-(`otp/request`, `otp/verify`, `refresh`, `logout`). Nigerian numbers are normalized to `+234`.
+**Email OTP is primary; Google Sign-In is optional.** OTPs expire in 10 minutes, allow five attempts,
+and are limited to five requests per email per hour. Brevo sends email OTPs. Both login methods issue
+a 30-minute JWT access token and a hashed, rotating refresh token (7 days normally; 30 days when
+`RememberDevice` is enabled). The session start is preserved through rotation and signed into access
+tokens; access tokens are capped at the absolute deadline and validated against it. Refresh is rejected
+and the presented token revoked at the 30-day absolute session limit, regardless of rotation or
+remembered-device setting. Endpoints: `api/v1/auth` (`otp/request`, `otp/verify`, `google`, `refresh`,
+`logout`).
 
 Vendors submit a `VendorRequest`; an Admin approves/rejects it. Approval grants the Vendor role and
 creates a `VendorProfile`. Listings from probation vendors are pre-moderated; vendors graduate to
 Trusted after 3 approved products.
+
+### Chat API
+
+`GET /api/v1/chats` returns the authenticated user's paged conversations, whether they are the buyer
+or vendor. Each `ChatSummaryResponse` includes the listing, other participant, lead status, and
+optional latest-message preview. API timestamps are serialized as `createdAtUtc`, including the
+conversation timestamp and `latestMessage.createdAtUtc`.
+
+Live chat updates use the authenticated SignalR hub at `/hubs/chats`. Clients call
+`JoinConversation(interactionId)` to join the `chat:{interactionId}` group; the hub checks that the
+caller is the conversation's buyer or vendor before adding the connection. `LeaveConversation` removes
+the connection from that group. Chat message writes broadcast the `MessageReceived` event to the
+conversation group, including messages sent through the interest and proceed-to-pay flows.
 
 ### Roles & authorization
 
@@ -101,11 +117,11 @@ startup via `RoleSeeder`. Authorization policies (defined in the Persistence DI 
 - `User : IdentityUser<Guid>` — buyers and vendors share one user table; role determines capability.
 - `VendorProfile` / `VendorRequest` — vendor onboarding + KYC/verification status.
 - `Category`, `Product`, `ProductImage` — catalog; products have a tsvector/GIN full-text index.
-- `Interaction` — a buyer lead (recorded before the `wa.me` handoff); tracks cross-discovery.
+- `Interaction` — a buyer lead (recorded before the in-app chat opens); tracks cross-discovery.
 - `Review` — interaction-gated (48h cooldown), one per buyer/product, 30-day edit window.
 - `Report`, `AuditLog` — trust & safety; auto-flag a vendor at an open-report threshold.
 - `Notification` — in-app notification feed.
-- `PhoneVerification` / `RefreshToken` — auth infrastructure.
+- `EmailVerification` / `RefreshToken` — auth infrastructure.
 
 ### Seeding
 
@@ -118,7 +134,7 @@ vendors, listings, interactions, reviews). It runs automatically in Development,
 The app reads `appsettings.json` / `appsettings.Development.json`. Required keys:
 
 - `ConnectionStrings:DefaultConnection` — PostgreSQL connection string
-- `Jwt:Key`, `Jwt:Issuer`, `Jwt:Audience`, `Jwt:ExpiryMinutes`
+- `Jwt:Key`, `Jwt:Issuer`, `Jwt:Audience`, `Jwt:ExpiryMinutes` (must be `30`)
 
 CORS is pre-configured for `http://localhost:5173` (Vite) and `http://localhost:3000` (React).
 

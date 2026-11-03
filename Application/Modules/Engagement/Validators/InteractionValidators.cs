@@ -23,4 +23,15 @@ namespace Application.Modules.Engagement.Validators
         public UpdateLeadValidator() =>
             RuleFor(x => x.Status).IsInEnum().WithMessage("A valid lead status is required.");
     }
+
+    /// <summary>Validates buyer-vendor chat messages.</summary>
+    public class SendChatMessageValidator : AbstractValidator<SendChatMessageRequest>
+    {
+        public SendChatMessageValidator()
+        {
+            RuleFor(x => x.Message)
+                .NotEmpty().WithMessage("Message is required.")
+                .MaximumLength(1000).WithMessage("Message cannot exceed 1000 characters.");
+        }
+    }
 }

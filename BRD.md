@@ -111,13 +111,13 @@ liquid soap, toilet wash, etc.).
 
 Roles are flags on a single User account. Every user is a Buyer by
 default; the Vendor and Admin roles unlock additional capabilities.
-Login is by phone + OTP.
+Login is by email OTP delivered through Brevo. Google Sign-In is an optional faster alternative.
 
 | **Capability**                               | **Anonymous** | **Buyer**           | **Vendor**           | **Admin**      |
 |----------------------------------------------|---------------|---------------------|----------------------|----------------|
 | Browse / search / view products              | Yes           | Yes                 | Yes                  | Yes            |
 | Tap “Chat on WhatsApp”                       | No (login)    | Yes                 | Yes                  | Yes            |
-| Register (phone + OTP)                       | —             | Yes                 | Yes                  | Yes            |
+| Register (email OTP)                         | —             | Yes                 | Yes                  | Yes            |
 | Apply to become a vendor                     | No            | Yes                 | —                    | —              |
 | Create / edit / delete own listings          | No            | No                  | Yes (after approval) | Yes (override) |
 | Mark listing sold / unavailable / reactivate | No            | No                  | Yes                  | Yes            |
@@ -192,7 +192,7 @@ Rules & validation
 - One account per primary phone. One optional verified secondary phone
   for recovery only (not a second login identity).
 
-- OTP expires after 5 minutes. Resend button with a 30–60s cooldown; max
+- Email OTP expires after 10 minutes. Resend button with a 30–60s cooldown; max
   3 resends per 15 minutes.
 
 - 3 incorrect entries invalidate the code; repeated invalidations
@@ -201,7 +201,7 @@ Rules & validation
 - Rate limits: OTP requests 3 / 15 min, 5 / hour, 10 / day per phone;
   auth endpoints throttled per IP; general API ~60 req/min/IP.
 
-- Anti-pumping: per-phone, per-IP and per-device limits; Termii daily
+- Anti-abuse: per-email, per-IP and per-device limits; provider spend monitoring
   spend alarm + spend-velocity alert; invisible bot check on request
   spikes.
 
@@ -490,8 +490,7 @@ the platform did not pay for.
 
 17. All transactions happen via WhatsApp, off-platform.
 
-18. Authentication is phone + OTP only (Nigeria +234); OTP expires after
-    5 minutes.
+18. Authentication is email OTP (10-minute expiry, five attempts, five requests per email per hour); Google Sign-In is optional. Access tokens last 30 minutes. Rotating refresh tokens last 7 days normally or 30 days on remembered devices, with a hard 30-day absolute session lifetime from login.
 
 19. New vendors require manual admin approval and identity verification;
     their first three listings are pre-moderated.
@@ -643,7 +642,7 @@ capability deferred for the first 6 months.
 | **Risk**                                               | **Mitigation**                                                                                                                                                                                                                             |
 |--------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Fake or retaliatory reviews                            | Interaction-gating; one review per user per product; report button; honest badging; post-MVP anomaly detection.                                                                                                                            |
-| OTP/SMS pumping draining budget                        | WhatsApp-first; NG-only + valid-prefix enforcement; per-phone/IP/device limits; spend-velocity alerts and daily budget alarm.                                                                                                              |
+| OTP abuse draining email budget                         | Per-email and per-IP limits; spend-velocity alerts and daily budget alarm.                                                                                                              |
 | Identity-data breach / NDPA exposure                   | No raw NIN/BVN stored; KYC via licensed provider; encryption, access control, audit logging; legal review before launch.                                                                                                                   |
 | Off-platform scams                                     | Verified Vendor badge; reporting from day one; auto-flag vendors crossing report thresholds; “transact carefully” disclaimer at handoff.                                                                                                   |
 | Moderation overload for a 3-person team                | Trust-tier graduation; pre-moderation only for new vendors’ first three listings; report-driven and spot-check moderation thereafter.                                                                                                      |
@@ -688,7 +687,7 @@ design, PM and testing).
 |-----------------------------|---------------------------|-------------------|------------------------------------------------------|
 | Hosting                     | Render.com (paid tier)    | ₦0 – ₦15,000      | Paid instance recommended; free tier sleeps.         |
 | Image Storage               | Cloudinary                | ₦0 – ₦8,000       | Use f_auto,q_auto delivery.                          |
-| OTP / SMS & WhatsApp        | Termii                    | ₦15,000 – ₦45,000 | Main variable cost; WhatsApp-first to control spend. |
+| OTP email                  | Brevo                     | Variable          | Transactional email service for login codes. |
 | Identity verification (KYC) | Licensed NIN/CAC provider | Variable          | New in v2.0; per-verification pricing.               |
 | Domain + SSL                | Namecheap                 | —                 | ₦8k–12k yearly.                                      |
 | Monitoring                  | Sentry                    | ₦0 – ₦10,000      | —                                                    |

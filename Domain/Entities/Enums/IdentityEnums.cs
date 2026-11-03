@@ -8,19 +8,4 @@ namespace Domain.Entities.Enums
         Deleted
     }
 
-    /// <summary>Delivery channel used to send a one-time passcode.</summary>
-    public enum OtpChannel
-    {
-        WhatsApp,
-        Sms
-    }
-
-    /// <summary>Lifecycle state of a one-time passcode challenge.</summary>
-    public enum OtpStatus
-    {
-        Pending,
-        Verified,
-        Expired,
-        Locked
-    }
 }

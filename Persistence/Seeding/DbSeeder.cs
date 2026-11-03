@@ -42,7 +42,7 @@ namespace Persistence.Seeding
 
         // Fixed authenticator secret (Base32) shared by all seeded admins so the admin surface is
         // reachable in demos/tests without a manual /auth/mfa/enroll round-trip. Add this secret to an
-        // authenticator app (issuer "TradeNaija") to generate the 6-digit TOTP codes the admins need at
+        // authenticator app (issuer "Trade9ja") to generate the 6-digit TOTP codes the admins need at
         // login. DEMO/DEV ONLY — a real deployment must enroll each admin with a per-user secret.
         internal const string DemoAdminAuthenticatorKey = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
 
@@ -56,6 +56,61 @@ namespace Persistence.Seeding
             await EnsureUserAsync(users, "+447928785373", "Khaleelah", "Founder", nameof(AppRole.Admin), isAdmin: true, isOwner: true);
             await EnsureUserAsync(users, "+2348070928156", "Sherif", "Akinyemi", nameof(AppRole.Admin), isAdmin: true);
             await EnsureUserAsync(users, "+2348071074683", "Raqeeb", "Akinyemi", nameof(AppRole.Admin), isAdmin: true);
+            await EnsureEmailAdminAsync(users, "easypeasyhighstreet@gmail.com");
+        }
+
+        private static async Task EnsureEmailAdminAsync(UserManager<User> users, string email)
+        {
+            var user = await users.FindByEmailAsync(email);
+            if (user is null)
+            {
+                user = new User
+                {
+                    Id = Guid.CreateVersion7(),
+                    UserName = email,
+                    Email = email,
+                    EmailConfirmed = true,
+                    FirstName = "Easy Peasy",
+                    LastName = "High Street",
+                    IsAdmin = true,
+                    TwoFactorEnabled = true,
+                    Status = UserStatus.Active,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                    LastActiveAtUtc = DateTimeOffset.UtcNow
+                };
+
+                var createResult = await users.CreateAsync(user);
+                if (!createResult.Succeeded)
+                    throw new InvalidOperationException(
+                        $"Failed to seed admin {email}: {string.Join("; ", createResult.Errors.Select(e => e.Description))}");
+            }
+            else if (!user.IsAdmin)
+            {
+                user.IsAdmin = true;
+                var updateResult = await users.UpdateAsync(user);
+                if (!updateResult.Succeeded)
+                    throw new InvalidOperationException(
+                        $"Failed to promote admin {email}: {string.Join("; ", updateResult.Errors.Select(e => e.Description))}");
+            }
+
+            var roles = await users.GetRolesAsync(user);
+            if (roles.Count != 1 || roles[0] != nameof(AppRole.Admin))
+            {
+                if (roles.Count > 0)
+                {
+                    var removeResult = await users.RemoveFromRolesAsync(user, roles);
+                    if (!removeResult.Succeeded)
+                        throw new InvalidOperationException(
+                            $"Failed to replace roles for admin {email}: {string.Join("; ", removeResult.Errors.Select(e => e.Description))}");
+                }
+
+                var addResult = await users.AddToRoleAsync(user, nameof(AppRole.Admin));
+                if (!addResult.Succeeded)
+                    throw new InvalidOperationException(
+                        $"Failed to assign admin role to {email}: {string.Join("; ", addResult.Errors.Select(e => e.Description))}");
+            }
+
+            await EnsureAdminMfaAsync(users, user);
         }
 
         /// <summary>
@@ -84,7 +139,7 @@ namespace Persistence.Seeding
                 ("Home & Beddings", "home-beddings", false, 3),
                 ("Food & Groceries", "food-groceries", true, 4),
                 ("Beauty & Personal Care", "beauty-personal-care", true, 5),
-            };
+            };'''''''''''''''''''
 
             foreach (var (name, slug, consumable, sort) in seed)
             {
@@ -92,7 +147,7 @@ namespace Persistence.Seeding
                     db.Categories.Add(new Category
                     {
                         Id = Guid.CreateVersion7(),
-                        Name = name,
+                        Name = name,''
                         Slug = slug,
                         IsActive = true,
                         IsConsumable = consumable,

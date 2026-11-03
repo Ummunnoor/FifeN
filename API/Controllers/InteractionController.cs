@@ -1,3 +1,4 @@
+using API.Hubs;
 using Application.DTOs;
 using Application.Modules.Engagement.DTOs;
 using Application.Modules.Engagement.Services.Interfaces;
@@ -5,22 +6,65 @@ using Application.Services.Interfaces;
 using Domain.Entities.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace API.Controllers
 {
-    /// <summary>Buyer lead capture (the WhatsApp hand-off) and the vendor leads dashboard.</summary>
+    /// <summary>Buyer lead capture, in-app chat, and the vendor leads dashboard.</summary>
     [ApiController]
     [Route("api/v1")]
-    public class InteractionController(IInteractionService interactions, ICurrentUserService currentUser) : ControllerBase
+    public class InteractionController(
+        IInteractionService interactions,
+        ICurrentUserService currentUser,
+        IHubContext<ChatHub> chatHub) : ControllerBase
     {
-        /// <summary>Records a lead, then returns a pre-filled WhatsApp link to the vendor.</summary>
+        /// <summary>Records a lead, then returns the in-app chat path for buyer-vendor conversation.</summary>
         [HttpPost("products/{id:guid}/interest")]
         [Authorize]
         public async Task<ActionResult<InterestResponse>> ExpressInterest(
             Guid id, [FromBody] ExpressInterestRequest request, CancellationToken ct)
         {
             var response = await interactions.ExpressInterestAsync(currentUser.RequireUserId(), id, request, ct);
+            if (response.Message is { } message)
+                await chatHub.Clients.Group(ChatHub.GroupName(response.InteractionId))
+                    .SendAsync("MessageReceived", message, ct);
+
             return StatusCode(StatusCodes.Status201Created, response);
+        }
+
+        /// <summary>Lists the caller's conversations, newest first.</summary>
+        [HttpGet("chats")]
+        [Authorize]
+        public async Task<ActionResult<PagedResponse<ChatSummaryResponse>>> MyChats(
+            [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
+            Ok(await interactions.GetChatsAsync(currentUser.RequireUserId(), page, pageSize, ct));
+
+        /// <summary>Reads messages for a conversation the caller participates in.</summary>
+        [HttpGet("chats/{id:guid}/messages")]
+        [Authorize]
+        public async Task<ActionResult<PagedResponse<ChatMessageResponse>>> ChatMessages(
+            Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken ct = default) =>
+            Ok(await interactions.GetChatMessagesAsync(currentUser.RequireUserId(), id, page, pageSize, ct));
+
+        /// <summary>Sends a message in a conversation the caller participates in.</summary>
+        [HttpPost("chats/{id:guid}/messages")]
+        [Authorize]
+        public async Task<ActionResult<ChatMessageResponse>> SendChatMessage(
+            Guid id, [FromBody] SendChatMessageRequest request, CancellationToken ct)
+        {
+            var message = await interactions.SendChatMessageAsync(currentUser.RequireUserId(), id, request, ct);
+            await chatHub.Clients.Group(ChatHub.GroupName(id)).SendAsync("MessageReceived", message, ct);
+            return StatusCode(StatusCodes.Status201Created, message);
+        }
+
+        /// <summary>Adds automated payment instructions to the chat.</summary>
+        [HttpPost("chats/{id:guid}/proceed-to-pay")]
+        [Authorize]
+        public async Task<ActionResult<PaymentInstructionsResponse>> ProceedToPay(Guid id, CancellationToken ct)
+        {
+            var response = await interactions.ProceedToPayAsync(currentUser.RequireUserId(), id, ct);
+            await chatHub.Clients.Group(ChatHub.GroupName(id)).SendAsync("MessageReceived", response.Message, ct);
+            return Ok(response);
         }
 
         /// <summary>The caller's leads, optionally filtered by status.</summary>

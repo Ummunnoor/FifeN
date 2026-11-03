@@ -8,11 +8,25 @@ using Domain.Entities.Interactions;
 
 namespace Application.Modules.Engagement.Services.Interfaces
 {
-    /// <summary>Buyer lead capture (the WhatsApp hand-off) and the vendor leads dashboard.</summary>
+    /// <summary>Buyer lead capture, in-app chat, and the vendor leads dashboard.</summary>
     public interface IInteractionService
     {
         Task<InterestResponse> ExpressInterestAsync(
             Guid buyerUserId, Guid productId, ExpressInterestRequest request, CancellationToken ct);
+
+        Task<PagedResponse<ChatSummaryResponse>> GetChatsAsync(
+            Guid userId, int page, int pageSize, CancellationToken ct);
+
+        Task<PagedResponse<ChatMessageResponse>> GetChatMessagesAsync(
+            Guid userId, Guid interactionId, int page, int pageSize, CancellationToken ct);
+
+        Task<ChatMessageResponse> SendChatMessageAsync(
+            Guid userId, Guid interactionId, SendChatMessageRequest request, CancellationToken ct);
+
+        Task<PaymentInstructionsResponse> ProceedToPayAsync(
+            Guid buyerUserId, Guid interactionId, CancellationToken ct);
+
+        Task EnsureConversationAccessAsync(Guid userId, Guid interactionId, CancellationToken ct);
 
         Task<PagedResponse<LeadResponse>> GetVendorLeadsAsync(
             Guid vendorUserId, LeadStatus? status, int page, int pageSize, CancellationToken ct);
@@ -39,5 +53,14 @@ namespace Application.Modules.Engagement.Services.Interfaces
         /// <summary>The vendor's leads, newest first, projected with product title and buyer name.</summary>
         Task<PagedResponse<LeadResponse>> GetVendorLeadsAsync(
             Guid vendorProfileId, LeadStatus? status, int page, int pageSize, CancellationToken ct);
+
+        /// <summary>The caller's conversations, newest first, with the latest message preview.</summary>
+        Task<PagedResponse<ChatSummaryResponse>> GetChatsAsync(
+            Guid userId, int page, int pageSize, CancellationToken ct);
+
+        Task<PagedResponse<ChatMessageResponse>> GetMessagesAsync(
+            Guid interactionId, int page, int pageSize, CancellationToken ct);
+
+        Task<ChatMessageResponse> AddMessageAsync(ChatMessage message, CancellationToken ct);
     }
 }

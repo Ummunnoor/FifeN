@@ -5,9 +5,9 @@
 **Author:** Solution Architect
 **Companion to:** BRD v2.1
 **Context that shapes every decision below:**
-- **Existing asset:** a working .NET 9 clean-architecture monolith (API → Application → Domain; Persistence → Domain), PostgreSQL via EF Core, ASP.NET Identity + JWT/refresh, FluentValidation, AutoMapper, Serilog. This is not greenfield.
+- **Existing asset:** a working .NET 10 clean-architecture monolith (API → Application → Domain; Persistence → Domain), PostgreSQL via EF Core, ASP.NET Identity + JWT/refresh, FluentValidation, AutoMapper, Serilog. This is not greenfield.
 - **Team:** ~3 people, .NET-literate, partly non-technical, building with AI assistance.
-- **Budget:** ₦150k–700k for 6 months. Termii (OTP/WhatsApp) is the main variable cost.
+- **Budget:** ₦150k–700k for 6 months. Brevo transactional email is the main authentication delivery cost.
 - **Timeline:** MVP launch end of Month 3.
 - **Scale (MVP target):** ~1,000 users, ~500 listings, ~50 vendors. Small.
 - **Binding NFRs:** ≤3s load at p75 on slow-4G; PWA/low-bandwidth; 99.5% uptime; daily backups (PITR preferred, RPO ≤24h, RTO ≤4h); HTTPS, RBAC, rate limiting, admin MFA, immutable audit log; NDPA (no raw NIN/BVN stored); i18n-ready.
@@ -44,18 +44,17 @@ API/Controllers/{...}         // thin controllers per context
 ### 4. API design approach
 - **REST/JSON**, versioned (`/api/v1`), cursor or page-based pagination for listings. Simple, cacheable, ideal for a low-tech PWA with straightforward screens.
 - Public GET endpoints (browse, search, shop page) are cache-friendly and CDN-frontable; mutation endpoints require auth.
-- **Inbound webhooks** as REST endpoints for Termii (OTP delivery status) and the KYC provider callback.
+- **Inbound webhooks** as REST endpoints for the KYC provider callback.
 - No GraphQL/gRPC — they add surface area and tooling cost with no payoff at this scale.
 
 ### 5. Authentication & authorization
-- **Phone + OTP** (Termii, WhatsApp-first → SMS fallback) issues **JWT access + refresh** (already built). Stateless JWT means the app scales horizontally without sticky sessions.
+- **Email OTP** (Brevo, 10-minute expiry) is primary; optional Google Identity Services ID token sign-in is supported. Both issue 30-minute JWT access tokens and hashed, rotating refresh tokens (7 days normally, 30 days for remembered devices), bounded by a 30-day absolute session lifetime from login.
 - **RBAC** via ASP.NET Identity roles (Buyer/User, Vendor, Admin, Support). **TOTP MFA** required for Admin.
 - Anonymous allowed for browse/search/shop-page; login gates Interest/Lead and Reviews.
 - Cross-cutting **middleware**: rate limiting (OTP + auth endpoints), HTTPS enforcement, and **audit logging of admin actions** (centralized — easy in a monolith).
 
 ### 6. Deployment model
-- **One Docker container** on Render (web service) + **managed PostgreSQL** + **Cloudinary** (images, `f_auto,q_auto`, CDN) + **Termii** + **Sentry**.
+- **One Docker container** on Render (web service) + **managed PostgreSQL** + **Cloudinary** (images, `f_auto,q_auto`, CDN) + **Brevo** + **Sentry**.
 - **One background worker** (a second small Render worker or a hosted-service queue) for async/scheduled work: notification fan-out, stale-listing nudges, the ~48h review nudge, image post-processing, dashboard read-model refresh. This keeps request latency low without splitting the app.
 - **GitHub Actions → Render** CI/CD. Single region (Frankfurt is the closest practical Render region to Nigeria) with a **CDN (e.g., Cloudflare)** in front of public GETs and static assets to fight latency.
-
 

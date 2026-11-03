@@ -14,8 +14,11 @@ namespace Persistence.Configurations
             b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             b.Ignore(x => x.DisplayName);
 
-            // One account per primary phone.
-            b.HasIndex(x => x.PhoneNumber).IsUnique();
+            b.Property(x => x.Email).HasMaxLength(320);
+            b.Property(x => x.NormalizedEmail).HasMaxLength(320);
+            b.Property(x => x.GoogleSubjectId).HasMaxLength(100);
+            b.HasIndex(x => x.NormalizedEmail).IsUnique();
+            b.HasIndex(x => x.GoogleSubjectId).IsUnique().HasFilter("\"GoogleSubjectId\" IS NOT NULL");
 
             b.HasMany(x => x.RefreshTokens)
                 .WithOne()
@@ -31,21 +34,20 @@ namespace Persistence.Configurations
             b.HasKey(x => x.Id);
             b.Property(x => x.TokenHash).IsRequired();
             b.Ignore(x => x.IsActive);
+            b.Property(x => x.RevokedAtUtc).IsConcurrencyToken();
             b.HasIndex(x => x.TokenHash);
             b.HasIndex(x => x.UserId);
         }
     }
 
-    public class PhoneVerificationConfiguration : IEntityTypeConfiguration<PhoneVerification>
+    public class EmailVerificationConfiguration : IEntityTypeConfiguration<EmailVerification>
     {
-        public void Configure(EntityTypeBuilder<PhoneVerification> b)
+        public void Configure(EntityTypeBuilder<EmailVerification> b)
         {
             b.HasKey(x => x.Id);
-            b.Property(x => x.PhoneNumber).HasMaxLength(20).IsRequired();
-            b.Property(x => x.Channel).HasConversion<string>().HasMaxLength(20);
-            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(x => x.Email).HasMaxLength(320).IsRequired();
             b.Property(x => x.CodeHash).IsRequired();
-            b.HasIndex(x => new { x.PhoneNumber, x.Status });
+            b.HasIndex(x => new { x.Email, x.IsConsumed, x.CreatedAtUtc });
         }
     }
 }

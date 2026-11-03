@@ -22,6 +22,17 @@ namespace Persistence.Configurations
         }
     }
 
+    public class ChatMessageConfiguration : IEntityTypeConfiguration<ChatMessage>
+    {
+        public void Configure(EntityTypeBuilder<ChatMessage> b)
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Body).HasMaxLength(1000).IsRequired();
+            b.HasOne<Interaction>().WithMany().HasForeignKey(x => x.InteractionId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.InteractionId, x.CreatedAtUtc });
+        }
+    }
+
     public class ReviewConfiguration : IEntityTypeConfiguration<Review>
     {
         public void Configure(EntityTypeBuilder<Review> b)

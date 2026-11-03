@@ -1,6 +1,4 @@
 using System;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Application.Abstractions;
@@ -17,9 +15,8 @@ using Domain.Entities.Vendors;
 namespace Application.Modules.Engagement.Services.Implementations
 {
     /// <summary>
-    /// Records buyer leads on-platform <em>before</em> the WhatsApp hand-off and serves the vendor leads
-    /// dashboard. The lead is always persisted first so the interaction is captured even if the buyer
-    /// never opens the chat. Repeat taps on the same listing collapse to a single lead so counts and the
+    /// Records buyer leads on-platform, creates an in-app conversation, and serves the vendor leads
+    /// dashboard. Repeat taps on the same listing collapse to a single lead so counts and the
     /// cross-discovery metric stay honest.
     /// </summary>
     public class InteractionService(
@@ -29,6 +26,16 @@ namespace Application.Modules.Engagement.Services.Implementations
         INotificationService notifications) : IInteractionService
     {
         private const int MaxPageSize = 50;
+
+        private static readonly PaymentAccountDetails PlaceholderPaymentAccount = new(
+            "Marketplace Vendor",
+            "Trade9ja Demo Bank",
+            "0123456789");
+
+        public Task<PagedResponse<ChatSummaryResponse>> GetChatsAsync(
+            Guid userId, int page, int pageSize, CancellationToken ct) =>
+            interactions.GetChatsAsync(
+                userId, Math.Max(page, 1), Math.Clamp(pageSize, 1, MaxPageSize), ct);
 
         public async Task<InterestResponse> ExpressInterestAsync(
             Guid buyerUserId, Guid productId, ExpressInterestRequest request, CancellationToken ct)
@@ -40,18 +47,14 @@ namespace Application.Modules.Engagement.Services.Implementations
                 throw new ConflictException("This listing is not currently available.");
 
             var vendor = product.Vendor;
-
-            // A vendor can't be a lead on their own listing — it would corrupt lead counts, the
-            // cross-discovery metric, and review eligibility (and produces a wa.me link to oneself).
             if (vendor.UserId == buyerUserId)
                 throw new BusinessRuleException("You cannot express interest in your own listing.");
 
             var message = string.IsNullOrWhiteSpace(request.Message) ? null : request.Message.Trim();
             var offer = request.OfferPrice;
 
-            // One lead per buyer per listing. A repeat tap refreshes the pre-fill but is not a new lead
-            // (keeps lead counts and cross-discovery honest) and does not re-notify the vendor.
             var lead = await interactions.GetByBuyerAndProductAsync(buyerUserId, productId, ct);
+            var isNewLead = lead is null;
             if (lead is not null)
             {
                 lead.BuyerMessage = message;
@@ -74,14 +77,83 @@ namespace Application.Modules.Engagement.Services.Implementations
                     CreatedAtUtc = DateTimeOffset.UtcNow
                 };
                 await interactions.AddAsync(lead, ct);
+            }
 
+            var chatMessage = message is null
+                ? null
+                : await interactions.AddMessageAsync(new ChatMessage
+                {
+                    Id = Guid.CreateVersion7(),
+                    InteractionId = lead.Id,
+                    SenderUserId = buyerUserId,
+                    Body = message,
+                    IsSystem = false,
+                    CreatedAtUtc = DateTimeOffset.UtcNow
+                }, ct);
+
+            if (isNewLead)
+            {
                 await notifications.NotifyAsync(
                     vendor.UserId, NotificationType.NewLead, "New lead",
                     $"A buyer is interested in \"{product.Title}\".", ct);
             }
 
-            var url = BuildWhatsAppUrl(vendor.WhatsAppNumber, vendor.BusinessName, product.Title, message, offer);
-            return new InterestResponse(lead.Id, url);
+            return new InterestResponse(lead.Id, $"/chats/{lead.Id}", chatMessage);
+        }
+
+        public async Task<PagedResponse<ChatMessageResponse>> GetChatMessagesAsync(
+            Guid userId, Guid interactionId, int page, int pageSize, CancellationToken ct)
+        {
+            await EnsureConversationAccessAsync(userId, interactionId, ct);
+            return await interactions.GetMessagesAsync(
+                interactionId, Math.Max(page, 1), Math.Clamp(pageSize, 1, MaxPageSize), ct);
+        }
+
+        public async Task<ChatMessageResponse> SendChatMessageAsync(
+            Guid userId, Guid interactionId, SendChatMessageRequest request, CancellationToken ct)
+        {
+            await EnsureConversationAccessAsync(userId, interactionId, ct);
+
+            var body = request.Message.Trim();
+            if (string.IsNullOrWhiteSpace(body))
+                throw new BusinessRuleException("Message cannot be empty.");
+
+            return await interactions.AddMessageAsync(new ChatMessage
+            {
+                Id = Guid.CreateVersion7(),
+                InteractionId = interactionId,
+                SenderUserId = userId,
+                Body = body,
+                IsSystem = false,
+                CreatedAtUtc = DateTimeOffset.UtcNow
+            }, ct);
+        }
+
+        public async Task<PaymentInstructionsResponse> ProceedToPayAsync(
+            Guid buyerUserId, Guid interactionId, CancellationToken ct)
+        {
+            var lead = await interactions.GetTrackedAsync(interactionId, ct)
+                ?? throw new NotFoundException("Conversation not found.");
+            if (lead.BuyerUserId != buyerUserId)
+                throw new ForbiddenException("Only the buyer can proceed to payment for this conversation.");
+
+            var body =
+                "Hey, thanks for stopping by. Make a payment into this account: " +
+                $"Account name: {PlaceholderPaymentAccount.AccountName}; " +
+                $"Bank: {PlaceholderPaymentAccount.BankName}; " +
+                $"Account number: {PlaceholderPaymentAccount.AccountNumber}.";
+
+            var message = await interactions.AddMessageAsync(new ChatMessage
+            {
+                Id = Guid.CreateVersion7(),
+                InteractionId = interactionId,
+                SenderUserId = null,
+                Body = body,
+                IsSystem = true,
+                CreatedAtUtc = DateTimeOffset.UtcNow
+            }, ct);
+
+            return new PaymentInstructionsResponse(message, PlaceholderPaymentAccount);
         }
 
         public async Task<PagedResponse<LeadResponse>> GetVendorLeadsAsync(
@@ -109,27 +181,23 @@ namespace Application.Modules.Engagement.Services.Implementations
             await interactions.SaveAsync(lead, ct);
         }
 
+        public async Task EnsureConversationAccessAsync(Guid userId, Guid interactionId, CancellationToken ct)
+        {
+            var lead = await interactions.GetTrackedAsync(interactionId, ct)
+                ?? throw new NotFoundException("Conversation not found.");
+
+            if (lead.BuyerUserId == userId)
+                return;
+
+            var vendor = await vendors.GetProfileByUserAsync(userId, ct);
+            if (vendor?.Id == lead.VendorProfileId)
+                return;
+
+            throw new ForbiddenException("You can only access conversations you are part of.");
+        }
+
         private async Task<VendorProfile> RequireVendor(Guid userId, CancellationToken ct) =>
             await vendors.GetProfileByUserAsync(userId, ct)
             ?? throw new ForbiddenException("You must be an approved vendor to manage leads.");
-
-        /// <summary>
-        /// Builds a <c>wa.me</c> deep link with a pre-filled message. The number is reduced to digits
-        /// (wa.me rejects '+' and spaces) and the message is percent-encoded.
-        /// </summary>
-        private static string BuildWhatsAppUrl(
-            string whatsAppNumber, string businessName, string productTitle, string? message, decimal? offer)
-        {
-            var digits = new string(whatsAppNumber.Where(char.IsDigit).ToArray());
-
-            var text = new StringBuilder();
-            text.Append($"Hi {businessName}, I'm interested in \"{productTitle}\" on TradeNaija.");
-            if (offer is { } amount)
-                text.Append($" I'd like to offer ₦{amount:N0}.");
-            if (!string.IsNullOrWhiteSpace(message))
-                text.Append(' ').Append(message);
-
-            return $"https://wa.me/{digits}?text={Uri.EscapeDataString(text.ToString())}";
-        }
     }
 }

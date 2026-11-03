@@ -19,7 +19,7 @@ namespace Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.0")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "citext");
@@ -164,7 +164,7 @@ namespace Persistence.Migrations
                     b.ToTable("ProductImages");
                 });
 
-            modelBuilder.Entity("Domain.Entities.Identity.PhoneVerification", b =>
+            modelBuilder.Entity("Domain.Entities.Identity.EmailVerification", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -173,11 +173,6 @@ namespace Persistence.Migrations
                     b.Property<int>("Attempts")
                         .HasColumnType("integer");
 
-                    b.Property<string>("Channel")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
                     b.Property<string>("CodeHash")
                         .IsRequired()
                         .HasColumnType("text");
@@ -185,24 +180,22 @@ namespace Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
                     b.Property<DateTimeOffset>("ExpiresAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("PhoneNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                    b.Property<bool>("IsConsumed")
+                        .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PhoneNumber", "Status");
+                    b.HasIndex("Email", "IsConsumed", "CreatedAtUtc");
 
-                    b.ToTable("PhoneVerifications");
+                    b.ToTable("EmailVerifications");
                 });
 
             modelBuilder.Entity("Domain.Entities.Identity.RefreshToken", b =>
@@ -220,7 +213,14 @@ namespace Persistence.Migrations
                     b.Property<DateTimeOffset>("ExpiresAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("RememberDevice")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset?>("RevokedAtUtc")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("SessionStartedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("TokenHash")
@@ -256,8 +256,8 @@ namespace Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Email")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
 
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
@@ -266,6 +266,10 @@ namespace Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
+
+                    b.Property<string>("GoogleSubjectId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<bool>("IsAdmin")
                         .HasColumnType("boolean");
@@ -291,8 +295,8 @@ namespace Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("NormalizedEmail")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
 
                     b.Property<string>("NormalizedUserName")
                         .HasMaxLength(256)
@@ -328,17 +332,49 @@ namespace Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("GoogleSubjectId")
+                        .IsUnique()
+                        .HasFilter("\"GoogleSubjectId\" IS NOT NULL");
+
                     b.HasIndex("NormalizedEmail")
+                        .IsUnique()
                         .HasDatabaseName("EmailIndex");
 
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
 
-                    b.HasIndex("PhoneNumber")
-                        .IsUnique();
-
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Entities.Interactions.ChatMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("InteractionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("SenderUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InteractionId", "CreatedAtUtc");
+
+                    b.ToTable("ChatMessages");
                 });
 
             modelBuilder.Entity("Domain.Entities.Interactions.Interaction", b =>
@@ -929,6 +965,15 @@ namespace Persistence.Migrations
                     b.HasOne("Domain.Entities.Identity.User", null)
                         .WithMany("RefreshTokens")
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Domain.Entities.Interactions.ChatMessage", b =>
+                {
+                    b.HasOne("Domain.Entities.Interactions.Interaction", null)
+                        .WithMany()
+                        .HasForeignKey("InteractionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

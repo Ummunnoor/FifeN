@@ -8,14 +8,14 @@ using Microsoft.AspNetCore.RateLimiting;
 
 namespace API.Controllers
 {
-    /// <summary>Phone + OTP authentication endpoints.</summary>
+    /// <summary>Email OTP and optional Google authentication endpoints.</summary>
     [ApiController]
     [Route("api/v1/auth")]
     [EnableRateLimiting(RateLimitingExtensions.AuthPolicy)]
     public class AuthController(
         IAuthenticationService auth, IMfaService mfa, ICurrentUserService currentUser) : ControllerBase
     {
-        /// <summary>Sends a one-time passcode to a Nigerian phone number (WhatsApp-first).</summary>
+        /// <summary>Sends a one-time passcode by email.</summary>
         [HttpPost("otp/request")]
         [AllowAnonymous]
         public async Task<IActionResult> RequestOtp([FromBody] OtpRequestRequest request, CancellationToken ct)
@@ -32,6 +32,11 @@ namespace API.Controllers
             var response = await auth.VerifyOtpAsync(request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
             return Ok(response);
         }
+
+        [HttpPost("google")]
+        [AllowAnonymous]
+        public async Task<ActionResult<AuthResponse>> Google([FromBody] GoogleSignInRequest request, CancellationToken ct) =>
+            Ok(await auth.GoogleSignInAsync(request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct));
 
         /// <summary>Rotates the refresh token and returns a fresh session.</summary>
         [HttpPost("refresh")]
@@ -51,25 +56,6 @@ namespace API.Controllers
             return NoContent();
         }
 
-        /// <summary>Sends an OTP to a proposed recovery (secondary) phone number.</summary>
-        [HttpPost("secondary-phone")]
-        [Authorize]
-        public async Task<IActionResult> AddSecondaryPhone(
-            [FromBody] AddSecondaryPhoneRequest request, CancellationToken ct)
-        {
-            await auth.RequestSecondaryPhoneAsync(currentUser.RequireUserId(), request, ct);
-            return Accepted();
-        }
-
-        /// <summary>Confirms the OTP and binds the recovery number to the caller's account.</summary>
-        [HttpPost("secondary-phone/verify")]
-        [Authorize]
-        public async Task<IActionResult> VerifySecondaryPhone(
-            [FromBody] VerifySecondaryPhoneRequest request, CancellationToken ct)
-        {
-            await auth.VerifySecondaryPhoneAsync(currentUser.RequireUserId(), request, ct);
-            return NoContent();
-        }
 
         /// <summary>Begins TOTP enrollment for an admin; returns the otpauth URI to scan. Authorizes on
         /// the Admin role alone (not the MFA-gated <c>RequireAdmin</c> policy) so MFA can be bootstrapped.</summary>

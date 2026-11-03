@@ -5,7 +5,7 @@ namespace Domain.Entities.Interactions
 {
     /// <summary>
     /// A logged "Contact / I'm interested" event by a signed-in buyer — recorded on-platform
-    /// <em>before</em> the WhatsApp hand-off. It is the closest observable signal to a sale and powers
+    /// <em>before</em> the in-app chat opens. It is the closest observable signal to a sale and powers
     /// the vendor leads dashboard, cross-discovery metrics, and review eligibility.
     /// </summary>
     public class Interaction

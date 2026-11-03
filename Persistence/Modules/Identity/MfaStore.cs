@@ -16,7 +16,7 @@ namespace Persistence.Modules.Identity
     /// </summary>
     public sealed class MfaStore(UserManager<User> userManager) : IMfaStore
     {
-        private const string Issuer = "TradeNaija";
+        private const string Issuer = "Trade9ja";
 
         public async Task<string> ResetAndBuildAuthenticatorUriAsync(Guid userId, CancellationToken ct)
         {

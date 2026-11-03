@@ -19,6 +19,12 @@ namespace Domain.Entities.Identity
         /// <summary>When the token expires (UTC).</summary>
         public DateTimeOffset ExpiresAtUtc { get; set; }
 
+        /// <summary>When the original login session started (UTC); preserved through token rotation.</summary>
+        public DateTimeOffset SessionStartedAtUtc { get; set; }
+
+        /// <summary>Whether this session uses the longer remembered-device refresh lifetime.</summary>
+        public bool RememberDevice { get; set; }
+
         /// <summary>When the token was revoked, if it has been (rotation or logout).</summary>
         public DateTimeOffset? RevokedAtUtc { get; set; }
 

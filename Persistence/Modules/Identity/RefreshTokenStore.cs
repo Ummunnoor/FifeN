@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Application.Abstractions;
+using Application.Modules.Identity;
 using Application.Modules.Identity.Services.Interfaces;
 using Domain.Entities.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -12,38 +13,71 @@ namespace Persistence.Modules.Identity
     /// <summary>Persists hashed, rotating refresh tokens. Raw tokens are returned to the caller only once.</summary>
     public sealed class RefreshTokenStore(FifeNDbContext db, ISecureHasher hasher) : IRefreshTokenStore
     {
-        private static readonly TimeSpan Lifetime = TimeSpan.FromDays(7);
-
-        public async Task<string> IssueAsync(Guid userId, string? ipAddress, CancellationToken ct)
+        public async Task<(string Token, DateTimeOffset SessionStartedAtUtc)> IssueAsync(
+            Guid userId, string? ipAddress, bool rememberDevice, CancellationToken ct)
         {
-            var raw = GenerateRawToken();
             var now = DateTimeOffset.UtcNow;
-            db.RefreshTokens.Add(new RefreshToken
-            {
-                Id = Guid.CreateVersion7(),
-                UserId = userId,
-                TokenHash = hasher.Hash(raw),
-                ExpiresAtUtc = now + Lifetime,
-                CreatedByIp = ipAddress,
-                CreatedAtUtc = now
-            });
+            var raw = GenerateRawToken();
+            db.RefreshTokens.Add(CreateRefreshToken(
+                userId, raw, ipAddress, rememberDevice, now, now));
             await db.SaveChangesAsync(ct);
-            return raw;
+            return (raw, now);
         }
 
-        public async Task<(Guid UserId, string Token)?> RotateAsync(
+        public async Task<(Guid UserId, string Token, DateTimeOffset SessionStartedAtUtc)?> RotateAsync(
             string oldRawToken, string? ipAddress, CancellationToken ct)
         {
             var hash = hasher.Hash(oldRawToken);
             var existing = await db.RefreshTokens
                 .FirstOrDefaultAsync(t => t.TokenHash == hash, ct);
 
-            if (existing is null || !existing.IsActive)
+            if (existing is null)
                 return null;
 
-            existing.RevokedAtUtc = DateTimeOffset.UtcNow;
-            var raw = await IssueAsync(existing.UserId, ipAddress, ct); // also saves the revocation
-            return (existing.UserId, raw);
+            var now = DateTimeOffset.UtcNow;
+            if (!AuthenticationTokenPolicy.IsSessionWithinAbsoluteLifetime(existing.SessionStartedAtUtc, now))
+            {
+                if (existing.RevokedAtUtc is null)
+                {
+                    existing.RevokedAtUtc = now;
+                    try
+                    {
+                        await db.SaveChangesAsync(ct);
+                    }
+                    catch (DbUpdateConcurrencyException)
+                    {
+                        db.Entry(existing).State = EntityState.Detached;
+                    }
+                }
+
+                return null;
+            }
+
+            if (!existing.IsActive)
+                return null;
+
+            var raw = GenerateRawToken();
+            var replacement = CreateRefreshToken(
+                existing.UserId,
+                raw,
+                ipAddress,
+                existing.RememberDevice,
+                existing.SessionStartedAtUtc,
+                now);
+            existing.RevokedAtUtc = now;
+            db.RefreshTokens.Add(replacement);
+
+            try
+            {
+                await db.SaveChangesAsync(ct);
+                return (existing.UserId, raw, existing.SessionStartedAtUtc);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                db.Entry(existing).State = EntityState.Detached;
+                db.Entry(replacement).State = EntityState.Detached;
+                return null;
+            }
         }
 
         public async Task RevokeAsync(string rawToken, CancellationToken ct)
@@ -53,11 +87,47 @@ namespace Persistence.Modules.Identity
             if (token is { RevokedAtUtc: null })
             {
                 token.RevokedAtUtc = DateTimeOffset.UtcNow;
-                await db.SaveChangesAsync(ct);
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    db.Entry(token).State = EntityState.Detached;
+                }
             }
         }
 
         private static string GenerateRawToken() =>
             Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+
+        private RefreshToken CreateRefreshToken(
+            Guid userId,
+            string rawToken,
+            string? ipAddress,
+            bool rememberDevice,
+            DateTimeOffset sessionStartedAtUtc,
+            DateTimeOffset now)
+        {
+            var lifetime = rememberDevice
+                ? AuthenticationTokenPolicy.RememberedRefreshTokenLifetime
+                : AuthenticationTokenPolicy.StandardRefreshTokenLifetime;
+            var absoluteExpiry = sessionStartedAtUtc + AuthenticationTokenPolicy.AbsoluteSessionLifetime;
+
+            return new RefreshToken
+            {
+                Id = Guid.CreateVersion7(),
+                UserId = userId,
+                TokenHash = hasher.Hash(rawToken),
+                ExpiresAtUtc = Min(now + lifetime, absoluteExpiry),
+                SessionStartedAtUtc = sessionStartedAtUtc,
+                RememberDevice = rememberDevice,
+                CreatedByIp = ipAddress,
+                CreatedAtUtc = now
+            };
+        }
+
+        private static DateTimeOffset Min(DateTimeOffset first, DateTimeOffset second) =>
+            first < second ? first : second;
     }
 }

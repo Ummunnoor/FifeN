@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Application.Modules.Identity;
 using Application.Modules.Identity.Services.Interfaces;
 using Domain.Entities.Identity;
 using Microsoft.Extensions.Configuration;
@@ -14,12 +16,21 @@ namespace Persistence.Modules.Identity
     public sealed class TokenService(IConfiguration configuration) : ITokenService
     {
         public (string Token, DateTimeOffset ExpiresAtUtc) CreateAccessToken(
-            User user, IReadOnlyCollection<string> roles, bool mfaSatisfied)
+            User user, IReadOnlyCollection<string> roles, bool mfaSatisfied, DateTimeOffset sessionStartedAtUtc)
         {
             var key = configuration["Jwt:Key"]
                 ?? throw new InvalidOperationException("JWT signing key (Jwt:Key) is not configured.");
-            var expiryMinutes = int.TryParse(configuration["Jwt:ExpiryMinutes"], out var m) ? m : 15;
-            var expiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(expiryMinutes);
+            if (!int.TryParse(configuration["Jwt:ExpiryMinutes"], out var expiryMinutes)
+                || expiryMinutes != AuthenticationTokenPolicy.AccessTokenLifetimeMinutes)
+                throw new InvalidOperationException(
+                    $"Jwt:ExpiryMinutes must be configured as {AuthenticationTokenPolicy.AccessTokenLifetimeMinutes} to match the authentication policy.");
+
+            var now = DateTimeOffset.UtcNow;
+            if (!AuthenticationTokenPolicy.IsSessionWithinAbsoluteLifetime(sessionStartedAtUtc, now))
+                throw new InvalidOperationException("Cannot issue an access token outside the absolute session lifetime.");
+            var absoluteExpiry = sessionStartedAtUtc + AuthenticationTokenPolicy.AbsoluteSessionLifetime;
+            var expiresAtUtc = Min(
+                now.AddMinutes(AuthenticationTokenPolicy.AccessTokenLifetimeMinutes), absoluteExpiry);
 
             var claims = new List<Claim>
             {
@@ -29,7 +40,8 @@ namespace Persistence.Modules.Identity
                 new("name", user.DisplayName),
                 new("is_owner", user.IsOwner ? "true" : "false"),
                 new("is_vendor", user.IsVendor ? "true" : "false"),
-                new("is_admin", user.IsAdmin ? "true" : "false")
+                new("is_admin", user.IsAdmin ? "true" : "false"),
+                new("session_started_at", sessionStartedAtUtc.ToString("O", CultureInfo.InvariantCulture))
             };
 
             foreach (var role in roles)
@@ -51,5 +63,8 @@ namespace Persistence.Modules.Identity
 
             return (new JwtSecurityTokenHandler().WriteToken(token), expiresAtUtc);
         }
+
+        private static DateTimeOffset Min(DateTimeOffset first, DateTimeOffset second) =>
+            first < second ? first : second;
     }
 }

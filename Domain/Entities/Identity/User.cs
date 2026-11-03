@@ -7,9 +7,9 @@ using Microsoft.AspNetCore.Identity;
 namespace Domain.Entities.Identity
 {
     /// <summary>
-    /// A TradeNaija account. Every user is a buyer by default; the <see cref="IsVendor"/> and
-    /// <see cref="IsAdmin"/> flags unlock additional capabilities. Authentication is phone + OTP;
-    /// the inherited password/email fields are unused in the MVP.
+    /// A Trade9ja account. Every user is a buyer by default; the <see cref="IsVendor"/> and
+    /// <see cref="IsAdmin"/> flags unlock additional capabilities. Authentication uses verified email,
+    /// with optional Google sign-in.
     /// </summary>
     public class User : IdentityUser<Guid>
     {
@@ -21,6 +21,7 @@ namespace Domain.Entities.Identity
 
         /// <summary>Optional verified phone used only for account recovery — never a second login identity.</summary>
         public string? SecondaryPhoneNumber { get; set; }
+        public string? GoogleSubjectId { get; set; }
 
         /// <summary>True once an approved <see cref="VendorProfile"/> exists.</summary>
         public bool IsVendor { get; set; }

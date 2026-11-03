@@ -1,20 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using Application.DTOs;
-using Application.DTOs.Identity;
-using Application.Services.Interfaces;
-using Application.Services.Interfaces.Authentication;
-using Application.Services.Interfaces.Logging;
-using Application.Validators;
-using AutoMapper;
-using Domain.Entities.Enums;
-using Domain.Entities.Identity;
-using Domain.Interfaces.Authentication;
-using FluentValidation;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 
 namespace Application.Services.Implementations.Authentication
 {

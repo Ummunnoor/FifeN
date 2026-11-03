@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Persistence
 {
     /// <summary>
-    /// The single application <see cref="DbContext"/> for the TradeNaija modular monolith. Identity is
+    /// The single application <see cref="DbContext"/> for the Trade9ja modular monolith. Identity is
     /// keyed by <see cref="System.Guid"/>; entity mappings live in <c>Persistence/Configurations</c> and
     /// are applied by assembly scan.
     /// </summary>
@@ -21,7 +21,7 @@ namespace Persistence
     {
         // Identity & access
         public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
-        public DbSet<PhoneVerification> PhoneVerifications => Set<PhoneVerification>();
+        public DbSet<EmailVerification> EmailVerifications => Set<EmailVerification>();
 
         // Vendors & verification
         public DbSet<VendorProfile> VendorProfiles => Set<VendorProfile>();
@@ -34,6 +34,7 @@ namespace Persistence
 
         // Engagement
         public DbSet<Interaction> Interactions => Set<Interaction>();
+        public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
         public DbSet<Review> Reviews => Set<Review>();
 
         // Trust & safety

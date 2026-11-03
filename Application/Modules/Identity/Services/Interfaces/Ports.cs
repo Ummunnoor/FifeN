@@ -12,20 +12,22 @@ namespace Application.Modules.Identity.Services.Interfaces
     {
         /// <summary>Builds a signed access token for the user and returns it with its expiry.</summary>
         (string Token, DateTimeOffset ExpiresAtUtc) CreateAccessToken(
-            User user, IReadOnlyCollection<string> roles, bool mfaSatisfied);
+            User user, IReadOnlyCollection<string> roles, bool mfaSatisfied, DateTimeOffset sessionStartedAtUtc);
     }
 
     /// <summary>Persists hashed, rotating refresh tokens.</summary>
     public interface IRefreshTokenStore
     {
-        /// <summary>Issues a new refresh token for the user and returns the raw (unhashed) value.</summary>
-        Task<string> IssueAsync(Guid userId, string? ipAddress, CancellationToken ct);
+        /// <summary>Starts a session and returns its refresh token and original UTC start time.</summary>
+        Task<(string Token, DateTimeOffset SessionStartedAtUtc)> IssueAsync(
+            Guid userId, string? ipAddress, bool rememberDevice, CancellationToken ct);
 
         /// <summary>
-        /// Revokes a still-active token and issues a replacement in one pass, returning the owning user id
-        /// and the new raw token. Returns null if the token is missing, expired, or already revoked.
+        /// Revokes a still-active token and issues a replacement while preserving the original session
+        /// start. Returns null if the token is missing, expired, revoked, or beyond the absolute session limit.
         /// </summary>
-        Task<(Guid UserId, string Token)?> RotateAsync(string oldRawToken, string? ipAddress, CancellationToken ct);
+        Task<(Guid UserId, string Token, DateTimeOffset SessionStartedAtUtc)?> RotateAsync(
+            string oldRawToken, string? ipAddress, CancellationToken ct);
 
         /// <summary>Revokes the supplied raw token if it exists.</summary>
         Task RevokeAsync(string rawToken, CancellationToken ct);
@@ -34,10 +36,12 @@ namespace Application.Modules.Identity.Services.Interfaces
     /// <summary>Account lookup/creation backed by ASP.NET Identity.</summary>
     public interface IUserAccountStore
     {
-        Task<User?> FindByPhoneAsync(string phoneNumber, CancellationToken ct);
+        Task<User?> FindByEmailAsync(string email, CancellationToken ct);
 
         /// <summary>Creates a buyer account (User role) for a freshly verified phone number.</summary>
-        Task<User> CreateBuyerAsync(string phoneNumber, CancellationToken ct);
+        Task<User> CreateBuyerAsync(string email, string? firstName, string? lastName, string? googleSubjectId, CancellationToken ct);
+
+        Task<User> LinkGoogleAsync(User user, string subjectId, string? firstName, string? lastName, CancellationToken ct);
 
         Task<IReadOnlyCollection<string>> GetRolesAsync(User user, CancellationToken ct);
 
@@ -46,24 +50,20 @@ namespace Application.Modules.Identity.Services.Interfaces
         Task<User?> FindByIdAsync(Guid userId, CancellationToken ct);
 
         /// <summary>True if the phone is any user's primary or secondary number, ignoring the given user.</summary>
-        Task<bool> PhoneInUseAsync(string phoneNumber, Guid excludingUserId, CancellationToken ct);
-
-        /// <summary>Binds a verified recovery number to the user.</summary>
-        Task SetSecondaryPhoneAsync(Guid userId, string phoneNumber, CancellationToken ct);
     }
 
     /// <summary>Stores and queries transient OTP challenges.</summary>
-    public interface IPhoneVerificationStore
+    public interface IEmailVerificationStore
     {
         /// <summary>Counts OTP requests for a phone number since the given instant (rate limiting).</summary>
-        Task<int> CountRequestsSinceAsync(string phoneNumber, DateTimeOffset since, CancellationToken ct);
+        Task<int> CountRequestsSinceAsync(string email, DateTimeOffset since, CancellationToken ct);
 
-        Task AddAsync(PhoneVerification verification, CancellationToken ct);
+        Task AddAsync(Domain.Entities.Identity.EmailVerification verification, CancellationToken ct);
 
         /// <summary>Returns the most recent pending challenge for a phone number, if any.</summary>
-        Task<PhoneVerification?> GetLatestPendingAsync(string phoneNumber, CancellationToken ct);
+        Task<Domain.Entities.Identity.EmailVerification?> GetLatestPendingAsync(string email, CancellationToken ct);
 
-        Task UpdateAsync(PhoneVerification verification, CancellationToken ct);
+        Task UpdateAsync(Domain.Entities.Identity.EmailVerification verification, CancellationToken ct);
     }
 
     /// <summary>TOTP (authenticator-app) enrollment and verification, backed by ASP.NET Identity.</summary>
@@ -79,10 +79,16 @@ namespace Application.Modules.Identity.Services.Interfaces
         Task<bool> VerifyCodeAsync(Guid userId, string code, CancellationToken ct);
     }
 
-    /// <summary>Delivers OTP codes over WhatsApp (preferred) or SMS via the messaging provider.</summary>
-    public interface IOtpSender
+    public interface IEmailOtpSender
     {
         /// <summary>Sends the code and returns the channel it was delivered over.</summary>
-        Task<OtpChannel> SendAsync(string phoneNumber, string code, CancellationToken ct);
+        Task SendAsync(string email, string code, CancellationToken ct);
     }
+
+    public interface IGoogleIdTokenVerifier
+    {
+        Task<GoogleUserIdentity?> VerifyAsync(string token, CancellationToken ct);
+    }
+
+    public sealed record GoogleUserIdentity(string SubjectId, string Email, string? FirstName, string? LastName);
 }

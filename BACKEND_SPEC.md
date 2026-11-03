@@ -2,7 +2,7 @@
 
 # TradeNaija / FifeN — Backend Implementation Specification
 
-**Target stack:** .NET 9, ASP.NET Core, EF Core 9 (Npgsql), PostgreSQL, ASP.NET Identity + JWT/refresh, FluentValidation, AutoMapper, Serilog.
+**Target stack:** .NET 10, ASP.NET Core, EF Core 9 (Npgsql), PostgreSQL, ASP.NET Identity + JWT/refresh, FluentValidation, AutoMapper, Serilog.
 **Architecture:** Modular monolith (single `FifeNDbContext`, one deployable, module-organized folders) per ARCHITECTURE.md.
 **Companion to:** BRD v2.1.
 
@@ -50,7 +50,6 @@ public enum ReportTargetType { Listing, Vendor, Review }
 public enum ReportReason { Prohibited, Counterfeit, Scam, Offensive, Spam, WrongCategory, Other }
 public enum ReportStatus { Open, Actioned, Dismissed }
 
-public enum OtpChannel { WhatsApp, Sms }
 public enum OtpStatus { Pending, Verified, Expired, Locked }
 
 public enum NotificationType {
@@ -228,15 +227,14 @@ public class AuditLog // append-only
     public DateTimeOffset CreatedAtUtc { get; set; }
 }
 
-public class PhoneVerification // OTP, transient
+public class EmailVerification // OTP, transient
 {
     public Guid Id { get; set; }
-    public string PhoneNumber { get; set; } = default!;
-    public OtpChannel Channel { get; set; }
+    public string Email { get; set; } = default!;
     public string CodeHash { get; set; } = default!;    // never store plaintext OTP
-    public DateTimeOffset ExpiresAtUtc { get; set; }    // +5 min
+    public DateTimeOffset ExpiresAtUtc { get; set; }    // +10 min
     public int Attempts { get; set; }
-    public OtpStatus Status { get; set; } = OtpStatus.Pending;
+    public bool IsConsumed { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
 }
 
@@ -246,6 +244,8 @@ public class RefreshToken
     public Guid UserId { get; set; }
     public string TokenHash { get; set; } = default!;
     public DateTimeOffset ExpiresAtUtc { get; set; }
+    public DateTimeOffset SessionStartedAtUtc { get; set; }
+    public bool RememberDevice { get; set; }
     public DateTimeOffset? RevokedAtUtc { get; set; }
     public string? CreatedByIp { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
@@ -407,8 +407,9 @@ Base path `/api/v1`. Auth column: **Anon** = anonymous; **Auth** = any authentic
 
 ### 3.1 Authentication & Identity
 ```csharp
-public record OtpRequestRequest(string PhoneNumber);
-public record OtpVerifyRequest(string PhoneNumber, string Code);
+public record OtpRequestRequest(string Email);
+public record OtpVerifyRequest(string Email, string Code, bool RememberDevice = false);
+public record GoogleSignInRequest(string IdToken, bool RememberDevice = false);
 public record AuthResponse(string AccessToken, string RefreshToken, DateTimeOffset ExpiresAtUtc, UserSummary User);
 public record UserSummary(Guid Id, string DisplayName, bool IsVendor, bool IsAdmin);
 public record RefreshRequest(string RefreshToken);
@@ -416,9 +417,10 @@ public record RefreshRequest(string RefreshToken);
 
 | Method | Route | Auth | Request | Success | Rules & errors |
 |---|---|---|---|---|---|
-| POST | `/auth/otp/request` | Anon | `OtpRequestRequest` | `200` | Phone must be valid NG (+234). Rate limit 3/15min, 5/hr, 10/day per phone. WhatsApp-first→SMS fallback. Errors: `400` bad phone, `429` rate limited. |
-| POST | `/auth/otp/verify` | Anon | `OtpVerifyRequest` | `200 AuthResponse` | Creates the user on first verify. Errors: `401` wrong code, `410` expired, `423` locked after 3 failed attempts, `429`. |
-| POST | `/auth/refresh` | Anon | `RefreshRequest` | `200 AuthResponse` | Rotates refresh token. Errors: `401` invalid/expired/revoked. |
+| POST | `/auth/otp/request` | Anon | `{ Email }` | `200` | Brevo sends a cryptographically random 6-digit code; 10-minute expiry; max 5 requests per email/hour. Errors: `400` bad email, `429` rate limited. |
+| POST | `/auth/otp/verify` | Anon | `{ Email, Code, RememberDevice }` | `200 AuthResponse` | Creates a user after verification; max 5 attempts; single-use code. Errors: `401` incorrect code, `410` expired, `423` attempts exhausted. |
+| POST | `/auth/google` | Anon | `{ IdToken, RememberDevice }` | `200 AuthResponse` | Verifies Google ID token, links by verified email, creates account when absent. |
+| POST | `/auth/refresh` | Anon | `RefreshRequest` | `200 AuthResponse` | Rotates refresh token. Errors: `401` invalid/expired/revoked or absolute session lifetime exceeded. |
 | POST | `/auth/logout` | Auth | `RefreshRequest` | `204` | Revokes the refresh token. |
 | POST | `/auth/secondary-phone` | Auth | `{ string PhoneNumber }` | `202` | Sends OTP to add a verified recovery number. Errors: `409` already in use. |
 | POST | `/auth/mfa/enroll` | Admin | — | `200 { string OtpAuthUri }` | TOTP enrollment. |
@@ -494,7 +496,12 @@ public record PagedResponse<T>(IReadOnlyList<T> Items, int Page, int PageSize, i
 ### 3.5 Interactions & Leads
 ```csharp
 public record ExpressInterestRequest(string? Message, decimal? OfferPrice);
-public record InterestResponse(Guid InteractionId, string WhatsAppUrl); // wa.me link, pre-filled
+public record InterestResponse(Guid InteractionId, string ChatPath, ChatMessageResponse? Message = null);
+public record SendChatMessageRequest(string Message);
+public record ChatMessageResponse(Guid Id, Guid InteractionId, Guid? SenderUserId,
+    string SenderDisplayName, string Body, bool IsSystem, DateTimeOffset CreatedAtUtc);
+public record PaymentAccountDetails(string AccountName, string BankName, string AccountNumber);
+public record PaymentInstructionsResponse(ChatMessageResponse Message, PaymentAccountDetails AccountDetails);
 public record LeadResponse(Guid Id, Guid ProductId, string ProductTitle, string BuyerDisplayName,
     string? Message, decimal? OfferPrice, LeadStatus Status, bool IsCrossDiscovery, DateTimeOffset CreatedAtUtc);
 public record UpdateLeadRequest(LeadStatus Status);
@@ -502,7 +509,11 @@ public record UpdateLeadRequest(LeadStatus Status);
 
 | Method | Route | Auth | Request | Success | Rules & errors |
 |---|---|---|---|---|---|
-| POST | `/products/{id}/interest` | Auth | `ExpressInterestRequest` | `201 InterestResponse` | Records `Interaction` (the lead) **before** building the `wa.me` URL with pre-filled message. Sets `IsCrossDiscovery` = no prior interaction with this vendor. Repeat taps deduped for metrics. Errors: `404`, `409` product not Live. |
+| POST | `/products/{id}/interest` | Auth | `ExpressInterestRequest` | `201 InterestResponse` | Records `Interaction` (the lead), stores any supplied `Message` in chat history and broadcasts it, then opens the in-app conversation at `ChatPath`. Sets `IsCrossDiscovery` = no prior interaction with this vendor. Repeat taps deduped for leads. Errors: `404`, `409` product not Live. |
+| GET | `/chats` | Auth | `page`, `pageSize` | `200 PagedResponse<ChatSummaryResponse>` | Lists conversations where the caller is the buyer or vendor, newest first, with listing, other participant, status, and latest-message preview. |
+| GET | `/chats/{id}/messages` | Auth | - | `200 PagedResponse<ChatMessageResponse>` | Buyer or contacted vendor only. |
+| POST | `/chats/{id}/messages` | Auth | `SendChatMessageRequest` | `201 ChatMessageResponse` | Persists and broadcasts the message through SignalR. Buyer or contacted vendor only. |
+| POST | `/chats/{id}/proceed-to-pay` | Auth | - | `200 PaymentInstructionsResponse` | Buyer only. Adds an automated system message with payment account details and broadcasts it through SignalR. |
 | GET | `/vendor/leads?status=New` | Vendor | — | `200 PagedResponse<LeadResponse>` | Caller's leads. |
 | PATCH | `/vendor/leads/{id}` | Vendor (owner) | `UpdateLeadRequest` | `200` | Mark Viewed/Closed. `403`,`404`. |
 
@@ -561,7 +572,7 @@ public record NotificationResponse(Guid Id, NotificationType Type, string Title,
 ## 4. Authentication & Authorization
 
 ### 4.1 Mechanism
-- Phone + OTP issues a **JWT access token** (short-lived, ~15 min) + **refresh token** (rotated, hashed at rest). Stateless JWT enables horizontal scaling.
+- Email OTP (10-minute expiry) or Google sign-in issues a **30-minute JWT access token** and a refresh token hashed at rest. Normal refresh tokens last 7 days; `RememberDevice` refresh tokens last 30 days. Both rotate on use, preserve the original login time, and are bounded by a **30-day absolute session lifetime**. Access tokens carry a signed session-start claim, expire no later than that deadline, and are rejected if the claim is missing or expired. Once the limit is reached, refresh is rejected and the presented token is revoked, requiring full login. `Jwt:ExpiryMinutes` must be configured as `30`.
 - **Policies** (registered in `Program.cs`):
   - `RequireVendor` → role `Vendor` **and** `VendorProfile.VerificationStatus == Verified`.
   - `RequireAdmin` → role `Admin` (or `Support` where read-only), **and** MFA satisfied (`amr` claim contains `mfa`).

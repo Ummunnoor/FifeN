@@ -30,9 +30,9 @@ namespace Persistence.Modules.Admin
             var activeListings = await db.Products
                 .CountAsync(p => p.Status == ListingStatus.Live && p.UpdatedAtUtc >= cutoff, ct);
 
-            var otpTotal = await db.PhoneVerifications.CountAsync(v => v.CreatedAtUtc >= cutoff, ct);
-            var otpVerified = await db.PhoneVerifications
-                .CountAsync(v => v.CreatedAtUtc >= cutoff && v.Status == OtpStatus.Verified, ct);
+            var otpTotal = await db.EmailVerifications.CountAsync(v => v.CreatedAtUtc >= cutoff, ct);
+            var otpVerified = await db.EmailVerifications
+                .CountAsync(v => v.CreatedAtUtc >= cutoff && v.IsConsumed, ct);
             var otpSuccessRate = otpTotal == 0 ? 0d : Math.Round((double)otpVerified / otpTotal, 4);
 
             var interactions30d = await db.Interactions.CountAsync(i => i.CreatedAtUtc >= cutoff, ct);

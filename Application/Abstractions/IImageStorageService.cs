@@ -1,7 +1,3 @@
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace Application.Abstractions
 {
     /// <summary>A single image to upload, decoupled from any web framework type.</summary>

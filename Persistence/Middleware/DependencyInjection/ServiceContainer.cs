@@ -1,8 +1,8 @@
-using System;
 using System.Security.Claims;
 using System.Text;
 using Application.Abstractions;
 using Application.Services.Interfaces;
+using Application.Modules.Identity;
 using CloudinaryDotNet;
 using Application.Services.Interfaces.Logging;
 using Application.Modules.Identity.Services.Interfaces;
@@ -25,6 +25,7 @@ using Domain.Entities.Enums;
 using Domain.Entities.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Persistence.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -75,9 +76,10 @@ namespace Persistence.DependencyInjection
             services.AddScoped<ITokenService, TokenService>();
             services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
             services.AddScoped<IUserAccountStore, UserAccountStore>();
-            services.AddScoped<IPhoneVerificationStore, PhoneVerificationStore>();
+            services.AddScoped<IEmailVerificationStore, EmailVerificationStore>();
             services.AddScoped<IMfaStore, MfaStore>();
-            services.AddScoped<IOtpSender, LoggingOtpSender>();
+            services.AddHttpClient<IEmailOtpSender, BrevoEmailOtpSender>();
+            services.AddHttpClient<IGoogleIdTokenVerifier, GoogleIdTokenVerifier>();
 
             // Vendors module + shared cross-cutting adapters.
             services.AddScoped<IVendorRepository, VendorRepository>();
@@ -117,10 +119,10 @@ namespace Persistence.DependencyInjection
         {
             services.AddIdentityCore<User>(options =>
                 {
-                    // Phone + OTP is the only credential; passwords and email confirmation are unused.
+                    // Email OTP and Google are the supported credentials.
                     options.SignIn.RequireConfirmedEmail = false;
                     options.SignIn.RequireConfirmedPhoneNumber = false;
-                    options.User.RequireUniqueEmail = false;
+                    options.User.RequireUniqueEmail = true;
                 })
                 .AddRoles<IdentityRole<Guid>>()
                 .AddEntityFrameworkStores<FifeNDbContext>()
@@ -131,6 +133,10 @@ namespace Persistence.DependencyInjection
         {
             var key = configuration["Jwt:Key"]
                 ?? throw new InvalidOperationException("JWT signing key (Jwt:Key) is not configured.");
+            if (!int.TryParse(configuration["Jwt:ExpiryMinutes"], out var expiryMinutes)
+                || expiryMinutes != AuthenticationTokenPolicy.AccessTokenLifetimeMinutes)
+                throw new InvalidOperationException(
+                    $"Jwt:ExpiryMinutes must be configured as {AuthenticationTokenPolicy.AccessTokenLifetimeMinutes} to match the authentication policy.");
 
             services.AddAuthentication(options =>
                 {
@@ -140,6 +146,34 @@ namespace Persistence.DependencyInjection
                 .AddJwtBearer(options =>
                 {
                     options.SaveToken = true;
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnMessageReceived = context =>
+                        {
+                            var accessToken = context.Request.Query["access_token"];
+                            var path = context.HttpContext.Request.Path;
+                            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/chats"))
+                                context.Token = accessToken;
+
+                            return Task.CompletedTask;
+                        },
+                        OnTokenValidated = context =>
+                        {
+                            var value = context.Principal?.FindFirst("session_started_at")?.Value;
+                            if (!AuthenticationTokenPolicy.TryParseSessionStartedAtClaim(
+                                    value, out var sessionStartedAtUtc))
+                            {
+                                context.Fail("The token has no valid session start.");
+                                return Task.CompletedTask;
+                            }
+
+                            var now = DateTimeOffset.UtcNow;
+                            if (!AuthenticationTokenPolicy.IsSessionWithinAbsoluteLifetime(sessionStartedAtUtc, now))
+                                context.Fail("The absolute session lifetime has expired.");
+
+                            return Task.CompletedTask;
+                        }
+                    };
                     // Pass claims through verbatim. The default handler rewrites short JWT claim names
                     // (e.g. "amr") into long Microsoft URIs, which would break RequireClaim("amr","mfa").
                     options.MapInboundClaims = false;

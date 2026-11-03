@@ -42,10 +42,10 @@ namespace FifeN.Tests.Integration
             // Roles: every AppRole value is seeded.
             Assert.Equal(Enum.GetNames<AppRole>().Length, await db.Roles.CountAsync());
 
-            // Admins (3) + vendors (5) + buyers (2) = 10 users.
-            Assert.Equal(3, await db.Users.CountAsync(u => u.IsAdmin));
+            // Admins (4) + vendors (5) + buyers (2) = 11 users.
+            Assert.Equal(4, await db.Users.CountAsync(u => u.IsAdmin));
             Assert.Equal(5, await db.VendorProfiles.CountAsync());
-            Assert.Equal(10, await db.Users.CountAsync());
+            Assert.Equal(11, await db.Users.CountAsync());
 
             Assert.Equal(5, await db.Categories.CountAsync());
             Assert.Equal(10, await db.Products.CountAsync());
@@ -56,6 +56,14 @@ namespace FifeN.Tests.Integration
             var owner = await db.Users.SingleAsync(u => u.IsOwner);
             Assert.True(owner.IsAdmin);
             Assert.True(owner.TwoFactorEnabled);
+
+            var emailAdmin = await db.Users.SingleAsync(u => u.Email == "easypeasyhighstreet@gmail.com");
+            Assert.True(emailAdmin.IsAdmin);
+            Assert.True(emailAdmin.TwoFactorEnabled);
+            Assert.True(await db.UserRoles
+                .Join(db.Roles, userRole => userRole.RoleId, role => role.Id,
+                    (userRole, role) => new { userRole.UserId, role.Name })
+                .AnyAsync(userRole => userRole.UserId == emailAdmin.Id && userRole.Name == nameof(AppRole.Admin)));
 
             // Cross-discovery interactions exist so the dashboard headline is non-zero.
             Assert.True(await db.Interactions.AnyAsync(i => i.IsCrossDiscovery));
@@ -69,7 +77,8 @@ namespace FifeN.Tests.Integration
 
             await using var db = _fixture.CreateContext();
 
-            Assert.Equal(10, await db.Users.CountAsync());
+            Assert.Equal(11, await db.Users.CountAsync());
+            Assert.Equal(4, await db.Users.CountAsync(u => u.IsAdmin));
             Assert.Equal(5, await db.VendorProfiles.CountAsync());
             Assert.Equal(5, await db.Categories.CountAsync());
             Assert.Equal(10, await db.Products.CountAsync());

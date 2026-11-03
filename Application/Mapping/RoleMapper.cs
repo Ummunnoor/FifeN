@@ -1,5 +1,3 @@
-using Domain.Entities.Enums;
-
 namespace Application.Mapping
 {
     public static class RoleMapper
