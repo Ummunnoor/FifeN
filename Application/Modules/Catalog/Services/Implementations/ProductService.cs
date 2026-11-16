@@ -173,23 +173,35 @@ namespace Application.Modules.Catalog.Services.Implementations
 
             var stored = new List<ProductImage>();
             var sortOrder = existing;
-            foreach (var image in images)
+            try
             {
-                var asset = await imageStorage.UploadAsync(image, $"products/{productId}", ct);
-                stored.Add(new ProductImage
+                foreach (var image in images)
                 {
-                    Id = Guid.CreateVersion7(),
-                    ProductId = productId,
-                    CloudinaryPublicId = asset.PublicId,
-                    Url = asset.Url,
-                    IsCover = existing == 0 && sortOrder == 0,
-                    SortOrder = sortOrder++,
-                    CreatedAtUtc = DateTimeOffset.UtcNow
-                });
-            }
+                    var asset = await imageStorage.UploadAsync(image, $"products/{productId}", ct);
+                    stored.Add(new ProductImage
+                    {
+                        Id = Guid.CreateVersion7(),
+                        ProductId = productId,
+                        CloudinaryPublicId = asset.PublicId,
+                        Url = asset.Url,
+                        IsCover = existing == 0 && sortOrder == 0,
+                        SortOrder = sortOrder++,
+                        CreatedAtUtc = DateTimeOffset.UtcNow
+                    });
+                }
 
-            await products.AddImagesAsync(stored, ct);
-            return stored.Select(i => i.Url).ToList();
+                await products.AddImagesAsync(stored, ct);
+                return stored.Select(i => i.Url).ToList();
+            }
+            catch
+            {
+                foreach (var image in stored)
+                {
+                    try { await imageStorage.DeleteAsync(image.CloudinaryPublicId, CancellationToken.None); }
+                    catch { /* Preserve the original failure; orphan cleanup can be retried operationally. */ }
+                }
+                throw;
+            }
         }
 
         public async Task<ProductDetail> GetPublicDetailAsync(Guid productId, CancellationToken ct)

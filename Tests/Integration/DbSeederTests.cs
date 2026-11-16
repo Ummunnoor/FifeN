@@ -52,14 +52,14 @@ namespace FifeN.Tests.Integration
             Assert.Equal(6, await db.Interactions.CountAsync());
             Assert.Equal(4, await db.Reviews.IgnoreQueryFilters().CountAsync());
 
-            // The founder is flagged as owner + admin with MFA enabled (admin-surface bootstrap).
+            // Seeded admins must enroll a per-user authenticator through the restricted setup flow.
             var owner = await db.Users.SingleAsync(u => u.IsOwner);
             Assert.True(owner.IsAdmin);
-            Assert.True(owner.TwoFactorEnabled);
+            Assert.False(owner.TwoFactorEnabled);
 
             var emailAdmin = await db.Users.SingleAsync(u => u.Email == "easypeasyhighstreet@gmail.com");
             Assert.True(emailAdmin.IsAdmin);
-            Assert.True(emailAdmin.TwoFactorEnabled);
+            Assert.False(emailAdmin.TwoFactorEnabled);
             Assert.True(await db.UserRoles
                 .Join(db.Roles, userRole => userRole.RoleId, role => role.Id,
                     (userRole, role) => new { userRole.UserId, role.Name })

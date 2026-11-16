@@ -60,17 +60,26 @@ namespace API.Controllers
         /// <summary>Begins TOTP enrollment for an admin; returns the otpauth URI to scan. Authorizes on
         /// the Admin role alone (not the MFA-gated <c>RequireAdmin</c> policy) so MFA can be bootstrapped.</summary>
         [HttpPost("mfa/enroll")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Policy = "RequireMfaSetup")]
         public async Task<ActionResult<MfaEnrollResponse>> EnrollMfa(CancellationToken ct) =>
             Ok(await mfa.EnrollAsync(currentUser.RequireUserId(), ct));
 
-        /// <summary>Activates MFA after confirming a code from the authenticator app.</summary>
+        /// <summary>Activates MFA after confirming a code and issues the admin session.</summary>
         [HttpPost("mfa/verify")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> VerifyMfa([FromBody] MfaVerifyRequest request, CancellationToken ct)
+        [Authorize(Policy = "RequireMfaSetup")]
+        public async Task<ActionResult<AuthResponse>> VerifyMfa([FromBody] MfaVerifyRequest request, CancellationToken ct)
         {
             await mfa.VerifyAsync(currentUser.RequireUserId(), request, ct);
-            return NoContent();
+            return Ok(await auth.CompleteAdminMfaEnrollmentAsync(
+                currentUser.RequireUserId(), currentUser.IpAddress, ct));
         }
+
+        /// <summary>Completes the second factor for an already-enrolled admin sign-in.</summary>
+        [HttpPost("mfa/login/verify")]
+        [Authorize(Policy = "RequireMfaChallenge")]
+        public async Task<ActionResult<AuthResponse>> VerifyLoginMfa(
+            [FromBody] MfaVerifyRequest request, CancellationToken ct) =>
+            Ok(await auth.CompleteAdminMfaChallengeAsync(
+                currentUser.RequireUserId(), request.Code, currentUser.IpAddress, ct));
     }
 }

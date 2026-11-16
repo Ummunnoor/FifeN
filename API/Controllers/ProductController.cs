@@ -5,6 +5,7 @@ using Application.Modules.Catalog.Services.Interfaces;
 using Application.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace API.Controllers
 {
@@ -42,7 +43,8 @@ namespace API.Controllers
         [Authorize]
         public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
         {
-            await products.DeleteAsync(currentUser.RequireUserId(), currentUser.IsAdmin, id, ct);
+            var mfaSatisfied = User.Claims.Any(c => c.Type == "amr" && c.Value == "mfa");
+            await products.DeleteAsync(currentUser.RequireUserId(), currentUser.IsAdmin && mfaSatisfied, id, ct);
             return NoContent();
         }
 

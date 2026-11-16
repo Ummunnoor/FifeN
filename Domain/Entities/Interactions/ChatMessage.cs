@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Domain.Entities.Interactions
 {
@@ -18,5 +19,8 @@ namespace Domain.Entities.Interactions
         public bool IsSystem { get; set; }
 
         public DateTimeOffset CreatedAtUtc { get; set; }
+
+        [NotMapped]
+        public string? SenderDisplayName { get; set; }
     }
 }

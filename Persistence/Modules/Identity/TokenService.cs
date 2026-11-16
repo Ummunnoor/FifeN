@@ -64,6 +64,40 @@ namespace Persistence.Modules.Identity
             return (new JwtSecurityTokenHandler().WriteToken(token), expiresAtUtc);
         }
 
+        public string CreateMfaSetupToken(User user, DateTimeOffset sessionStartedAtUtc)
+            => CreateRestrictedMfaToken(user, sessionStartedAtUtc, "mfa_setup", 10);
+
+        public string CreateMfaChallengeToken(User user, DateTimeOffset sessionStartedAtUtc)
+            => CreateRestrictedMfaToken(user, sessionStartedAtUtc, "mfa_login", 5);
+
+        private string CreateRestrictedMfaToken(
+            User user, DateTimeOffset sessionStartedAtUtc, string tokenUse, int lifetimeMinutes)
+        {
+            var key = configuration["Jwt:Key"]
+                ?? throw new InvalidOperationException("JWT signing key (Jwt:Key) is not configured.");
+            var now = DateTimeOffset.UtcNow;
+            if (!AuthenticationTokenPolicy.IsSessionWithinAbsoluteLifetime(sessionStartedAtUtc, now))
+                throw new InvalidOperationException("Cannot issue a setup token outside the absolute session lifetime.");
+
+            var credentials = new SigningCredentials(
+                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)), SecurityAlgorithms.HmacSha256);
+            var claims = new[]
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim("token_use", tokenUse),
+                new Claim("session_started_at", sessionStartedAtUtc.ToString("O", CultureInfo.InvariantCulture))
+            };
+            var token = new JwtSecurityToken(
+                issuer: configuration["Jwt:Issuer"],
+                audience: configuration["Jwt:Audience"],
+                claims: claims,
+                notBefore: now.UtcDateTime,
+                expires: now.AddMinutes(lifetimeMinutes).UtcDateTime,
+                signingCredentials: credentials);
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
         private static DateTimeOffset Min(DateTimeOffset first, DateTimeOffset second) =>
             first < second ? first : second;
     }

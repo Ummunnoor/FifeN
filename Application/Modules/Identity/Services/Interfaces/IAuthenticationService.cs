@@ -22,6 +22,10 @@ namespace Application.Modules.Identity.Services.Interfaces
         /// <summary>Rotates the refresh token and returns a fresh session.</summary>
         Task<AuthResponse> RefreshAsync(RefreshRequest request, string? ipAddress, CancellationToken ct);
 
+        Task<AuthResponse> CompleteAdminMfaEnrollmentAsync(Guid userId, string? ipAddress, CancellationToken ct);
+
+        Task<AuthResponse> CompleteAdminMfaChallengeAsync(Guid userId, string code, string? ipAddress, CancellationToken ct);
+
         /// <summary>Revokes the supplied refresh token.</summary>
         Task LogoutAsync(RefreshRequest request, CancellationToken ct);
 

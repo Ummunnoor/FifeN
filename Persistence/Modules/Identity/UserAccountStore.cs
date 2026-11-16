@@ -20,6 +20,7 @@ namespace Persistence.Modules.Identity
 
         public async Task<User> CreateBuyerAsync(string email, string? firstName, string? lastName, string? googleSubjectId, CancellationToken ct)
         {
+            ct.ThrowIfCancellationRequested();
             var user = new User
             {
                 Id = Guid.CreateVersion7(),
@@ -34,6 +35,7 @@ namespace Persistence.Modules.Identity
                 LastActiveAtUtc = DateTimeOffset.UtcNow
             };
 
+            ct.ThrowIfCancellationRequested();
             var result = await userManager.CreateAsync(user);
             if (!result.Succeeded)
                 throw new ConflictException(
@@ -41,12 +43,16 @@ namespace Persistence.Modules.Identity
 
             var roleResult = await userManager.AddToRoleAsync(user, nameof(AppRole.User));
             if (!roleResult.Succeeded)
+            {
+                await userManager.DeleteAsync(user);
                 throw new ConflictException(string.Join("; ", roleResult.Errors.Select(e => e.Description)));
+            }
             return user;
         }
 
         public async Task<User> LinkGoogleAsync(User user, string subjectId, string? firstName, string? lastName, CancellationToken ct)
         {
+            ct.ThrowIfCancellationRequested();
             if (user.GoogleSubjectId is not null && user.GoogleSubjectId != subjectId)
                 throw new ConflictException("A different Google account is already linked to this email.");
             if (user.GoogleSubjectId is null)
@@ -60,8 +66,11 @@ namespace Persistence.Modules.Identity
             return user;
         }
 
-        public async Task<IReadOnlyCollection<string>> GetRolesAsync(User user, CancellationToken ct) =>
-            (IReadOnlyCollection<string>)await userManager.GetRolesAsync(user);
+        public async Task<IReadOnlyCollection<string>> GetRolesAsync(User user, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            return (IReadOnlyCollection<string>)await userManager.GetRolesAsync(user);
+        }
 
         public async Task TouchLastActiveAsync(Guid userId, CancellationToken ct)
         {

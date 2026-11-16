@@ -175,10 +175,7 @@ namespace Persistence.Modules.Engagement
             db.ChatMessages.Add(message);
             await db.SaveChangesAsync(ct);
 
-            var sender = message.SenderUserId.HasValue
-                ? await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == message.SenderUserId.Value, ct)
-                : null;
-            var displayName = message.IsSystem ? "Trade9ja" : $"{sender!.FirstName} {sender.LastName}".Trim();
+            var displayName = message.IsSystem ? "Trade9ja" : message.SenderDisplayName ?? "A user";
 
             return new ChatMessageResponse(
                 message.Id,

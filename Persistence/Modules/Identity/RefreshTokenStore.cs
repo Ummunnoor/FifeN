@@ -13,6 +13,14 @@ namespace Persistence.Modules.Identity
     /// <summary>Persists hashed, rotating refresh tokens. Raw tokens are returned to the caller only once.</summary>
     public sealed class RefreshTokenStore(FifeNDbContext db, ISecureHasher hasher) : IRefreshTokenStore
     {
+        public async Task<Guid?> FindUserIdAsync(string rawToken, CancellationToken ct)
+        {
+            var hash = hasher.Hash(rawToken);
+            return await db.RefreshTokens.AsNoTracking()
+                .Where(t => t.TokenHash == hash && t.RevokedAtUtc == null && t.ExpiresAtUtc > DateTimeOffset.UtcNow)
+                .Select(t => (Guid?)t.UserId).FirstOrDefaultAsync(ct);
+        }
+
         public async Task<(string Token, DateTimeOffset SessionStartedAtUtc)> IssueAsync(
             Guid userId, string? ipAddress, bool rememberDevice, CancellationToken ct)
         {

@@ -13,11 +13,16 @@ namespace Application.Modules.Identity.Services.Interfaces
         /// <summary>Builds a signed access token for the user and returns it with its expiry.</summary>
         (string Token, DateTimeOffset ExpiresAtUtc) CreateAccessToken(
             User user, IReadOnlyCollection<string> roles, bool mfaSatisfied, DateTimeOffset sessionStartedAtUtc);
+
+        string CreateMfaSetupToken(User user, DateTimeOffset sessionStartedAtUtc);
+
+        string CreateMfaChallengeToken(User user, DateTimeOffset sessionStartedAtUtc);
     }
 
     /// <summary>Persists hashed, rotating refresh tokens.</summary>
     public interface IRefreshTokenStore
     {
+        Task<Guid?> FindUserIdAsync(string rawToken, CancellationToken ct);
         /// <summary>Starts a session and returns its refresh token and original UTC start time.</summary>
         Task<(string Token, DateTimeOffset SessionStartedAtUtc)> IssueAsync(
             Guid userId, string? ipAddress, bool rememberDevice, CancellationToken ct);
@@ -55,10 +60,9 @@ namespace Application.Modules.Identity.Services.Interfaces
     /// <summary>Stores and queries transient OTP challenges.</summary>
     public interface IEmailVerificationStore
     {
-        /// <summary>Counts OTP requests for a phone number since the given instant (rate limiting).</summary>
-        Task<int> CountRequestsSinceAsync(string email, DateTimeOffset since, CancellationToken ct);
-
-        Task AddAsync(Domain.Entities.Identity.EmailVerification verification, CancellationToken ct);
+        /// <summary>Atomically enforces the per-email request limit and stores the challenge.</summary>
+        Task<bool> TryAddWithinLimitAsync(
+            Domain.Entities.Identity.EmailVerification verification, DateTimeOffset since, int limit, CancellationToken ct);
 
         /// <summary>Returns the most recent pending challenge for a phone number, if any.</summary>
         Task<Domain.Entities.Identity.EmailVerification?> GetLatestPendingAsync(string email, CancellationToken ct);

@@ -15,6 +15,8 @@ namespace Persistence.Services
         public Guid? UserId =>
             Guid.TryParse(Principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 
+        public string? DisplayName => Principal?.FindFirstValue("name");
+
         public bool IsAuthenticated => Principal?.Identity?.IsAuthenticated ?? false;
 
         public bool IsAdmin => Principal?.IsInRole(nameof(AppRole.Admin)) ?? false;

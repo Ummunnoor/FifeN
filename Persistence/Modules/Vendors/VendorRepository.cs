@@ -84,12 +84,13 @@ namespace Persistence.Modules.Vendors
         public async Task<(double Average, int Count)> GetRatingAsync(Guid vendorProfileId, CancellationToken ct)
         {
             // The Review query filter restricts this to visible reviews only.
-            var ratings = await db.Reviews
+            var aggregate = await db.Reviews
                 .Where(r => r.VendorProfileId == vendorProfileId)
-                .Select(r => r.Rating)
-                .ToListAsync(ct);
+                .GroupBy(_ => 1)
+                .Select(g => new { Average = g.Average(r => r.Rating), Count = g.Count() })
+                .FirstOrDefaultAsync(ct);
 
-            return ratings.Count == 0 ? (0d, 0) : (Math.Round(ratings.Average(), 2), ratings.Count);
+            return aggregate is null ? (0d, 0) : (Math.Round(aggregate.Average, 2), aggregate.Count);
         }
     }
 }

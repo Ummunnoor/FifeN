@@ -9,6 +9,7 @@ namespace Application.Services.Interfaces
     {
         /// <summary>The caller's user id, or null if anonymous.</summary>
         Guid? UserId { get; }
+        string? DisplayName { get; }
 
         /// <summary>True when the request carries a valid authenticated principal.</summary>
         bool IsAuthenticated { get; }

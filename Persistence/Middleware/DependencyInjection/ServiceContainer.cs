@@ -159,6 +159,21 @@ namespace Persistence.DependencyInjection
                         },
                         OnTokenValidated = context =>
                         {
+                            var tokenUse = context.Principal?.FindFirst("token_use")?.Value;
+                            if (tokenUse == "mfa_setup"
+                                && context.Request.Path != "/api/v1/auth/mfa/enroll"
+                                && context.Request.Path != "/api/v1/auth/mfa/verify")
+                            {
+                                context.Fail("The setup token cannot be used for this endpoint.");
+                                return Task.CompletedTask;
+                            }
+                            if (tokenUse == "mfa_login"
+                                && context.Request.Path != "/api/v1/auth/mfa/login/verify")
+                            {
+                                context.Fail("The MFA challenge token cannot be used for this endpoint.");
+                                return Task.CompletedTask;
+                            }
+
                             var value = context.Principal?.FindFirst("session_started_at")?.Value;
                             if (!AuthenticationTokenPolicy.TryParseSessionStartedAtClaim(
                                     value, out var sessionStartedAtUtc))
@@ -232,6 +247,12 @@ namespace Persistence.DependencyInjection
                     .RequireRole(nameof(AppRole.Admin))
                     .RequireClaim("amr", "mfa"));
                 options.AddPolicy("RequireOwner", p => p.RequireClaim("is_owner", "true"));
+                options.AddPolicy("RequireMfaSetup", p => p
+                    .RequireAuthenticatedUser()
+                    .RequireClaim("token_use", "mfa_setup"));
+                options.AddPolicy("RequireMfaChallenge", p => p
+                    .RequireAuthenticatedUser()
+                    .RequireClaim("token_use", "mfa_login"));
             });
         }
     }

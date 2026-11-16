@@ -23,21 +23,36 @@ namespace Persistence.Modules.Admin
         {
             var cutoff = DateTimeOffset.UtcNow.AddDays(-30);
 
-            var registeredUsers = await db.Users.CountAsync(ct);
-            var activeUsers30d = await db.Users
-                .CountAsync(u => u.LastActiveAtUtc != null && u.LastActiveAtUtc >= cutoff, ct);
+            var userStats = await db.Users
+                .GroupBy(_ => 1)
+                .Select(g => new
+                {
+                    Registered = g.Count(),
+                    Active = g.Count(u => u.LastActiveAtUtc != null && u.LastActiveAtUtc >= cutoff)
+                })
+                .FirstOrDefaultAsync(ct);
+            var registeredUsers = userStats?.Registered ?? 0;
+            var activeUsers30d = userStats?.Active ?? 0;
 
             var activeListings = await db.Products
                 .CountAsync(p => p.Status == ListingStatus.Live && p.UpdatedAtUtc >= cutoff, ct);
 
-            var otpTotal = await db.EmailVerifications.CountAsync(v => v.CreatedAtUtc >= cutoff, ct);
-            var otpVerified = await db.EmailVerifications
-                .CountAsync(v => v.CreatedAtUtc >= cutoff && v.IsConsumed, ct);
+            var otpStats = await db.EmailVerifications
+                .Where(v => v.CreatedAtUtc >= cutoff)
+                .GroupBy(_ => 1)
+                .Select(g => new { Total = g.Count(), Verified = g.Count(v => v.IsConsumed) })
+                .FirstOrDefaultAsync(ct);
+            var otpTotal = otpStats?.Total ?? 0;
+            var otpVerified = otpStats?.Verified ?? 0;
             var otpSuccessRate = otpTotal == 0 ? 0d : Math.Round((double)otpVerified / otpTotal, 4);
 
-            var interactions30d = await db.Interactions.CountAsync(i => i.CreatedAtUtc >= cutoff, ct);
-            var crossDiscovery30d = await db.Interactions
-                .CountAsync(i => i.CreatedAtUtc >= cutoff && i.IsCrossDiscovery, ct);
+            var interactionStats = await db.Interactions
+                .Where(i => i.CreatedAtUtc >= cutoff)
+                .GroupBy(_ => 1)
+                .Select(g => new { Total = g.Count(), CrossDiscovery = g.Count(i => i.IsCrossDiscovery) })
+                .FirstOrDefaultAsync(ct);
+            var interactions30d = interactionStats?.Total ?? 0;
+            var crossDiscovery30d = interactionStats?.CrossDiscovery ?? 0;
             var crossDiscoveryRate = interactions30d == 0
                 ? 0d : Math.Round((double)crossDiscovery30d / interactions30d, 4);
 

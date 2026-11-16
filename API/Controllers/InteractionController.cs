@@ -25,6 +25,8 @@ namespace API.Controllers
             Guid id, [FromBody] ExpressInterestRequest request, CancellationToken ct)
         {
             var response = await interactions.ExpressInterestAsync(currentUser.RequireUserId(), id, request, ct);
+            if (response.Message is { } authoredMessage)
+                response = response with { Message = authoredMessage with { SenderDisplayName = currentUser.DisplayName ?? "A user" } };
             if (response.Message is { } message)
                 await chatHub.Clients.Group(ChatHub.GroupName(response.InteractionId))
                     .SendAsync("MessageReceived", message, ct);
@@ -53,6 +55,7 @@ namespace API.Controllers
             Guid id, [FromBody] SendChatMessageRequest request, CancellationToken ct)
         {
             var message = await interactions.SendChatMessageAsync(currentUser.RequireUserId(), id, request, ct);
+            message = message with { SenderDisplayName = currentUser.DisplayName ?? "A user" };
             await chatHub.Clients.Group(ChatHub.GroupName(id)).SendAsync("MessageReceived", message, ct);
             return StatusCode(StatusCodes.Status201Created, message);
         }

@@ -40,14 +40,15 @@ builder.Services.AddPersistenceServices(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddApiRateLimiting();
 
-// Trust the hosting proxy's X-Forwarded-* headers so the real client IP (not the proxy's) drives
-// rate limiting and audit logging. KnownProxies/IPNetworks are cleared because the proxy IP is not
-// fixed on managed hosts (e.g. Render); the platform is the only hop in front of the app.
+// Trust forwarded headers only from explicitly configured proxy addresses. With no configured
+// proxy, the framework ignores forwarded headers and uses the direct peer address.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownIPNetworks.Clear();
-    options.KnownProxies.Clear();
+    options.ForwardLimit = 1;
+    foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+        if (System.Net.IPAddress.TryParse(proxy, out var address))
+            options.KnownProxies.Add(address);
 });
 
 builder.Services.AddCors(options =>
@@ -95,6 +96,7 @@ using (var scope = app.Services.CreateScope())
 
     var roleManager = services.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
     await RoleSeeder.SeedAsync(roleManager);
+    await DbSeeder.EnsureBusinessAdminAsync(services);
 
     // Full demo dataset (founder/admins, categories, pilot vendors, listings, interactions, reviews):
     // Development by default, Production only with an explicit --seed flag. Idempotent.
