@@ -22,6 +22,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Identity" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.AspNetCore.WebUtilities" />
     <PackageReference Include="Microsoft.Extensions.Identity.Stores" />
     <!-- Provides NpgsqlTsVector for the full-text SearchVector column on Product. -->
     <PackageReference Include="Npgsql" />
