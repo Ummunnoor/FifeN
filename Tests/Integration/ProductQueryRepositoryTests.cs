@@ -39,6 +39,23 @@ namespace FifeN.Tests.Integration
             await db.SaveChangesAsync();
         }
 
+        private async Task SeedVendorWithProductsAsync(
+            params (string Title, string Desc, NigerianState State, string City, ListingStatus Status, string? Size, string? Color)[] products)
+        {
+            await using var db = _fixture.CreateContext();
+            var user = TestData.VendorUser();
+            var vendor = TestData.Vendor(user.Id);
+            var category = TestData.Category("Fashion", "fashion");
+            db.Users.Add(user);
+            db.VendorProfiles.Add(vendor);
+            db.Categories.Add(category);
+            foreach (var p in products)
+                db.Products.Add(TestData.Product(
+                    vendor.Id, category.Id, p.Title, p.Desc, p.State, p.City,
+                    status: p.Status, size: p.Size, color: p.Color));
+            await db.SaveChangesAsync();
+        }
+
         [Fact]
         public async Task SearchAsync_WithFullTextTerm_MatchesViaTsVector()
         {
@@ -86,6 +103,44 @@ namespace FifeN.Tests.Integration
 
             Assert.Equal(1, result.Total);
             Assert.Equal("Oyo Listing", result.Items.Single().Title);
+        }
+
+        [Fact]
+        public async Task SearchAsync_WithSizeAndColorFilters_ReturnsExactMatches()
+        {
+            await SeedVendorWithProductsAsync(
+                ("Red Medium", "x", NigerianState.Lagos, "Ikeja", ListingStatus.Live, "M", "Red"),
+                ("Red Large", "x", NigerianState.Lagos, "Ikeja", ListingStatus.Live, "L", "Red"),
+                ("Blue Medium", "x", NigerianState.Lagos, "Ikeja", ListingStatus.Live, "M", "Blue"));
+
+            await using var db = _fixture.CreateContext();
+            var repo = new ProductQueryRepository(db);
+
+            var result = await repo.SearchAsync(
+                new ProductQuery(Size: "M", Color: "Red"), CancellationToken.None);
+
+            Assert.Equal(1, result.Total);
+            Assert.Equal("Red Medium", result.Items.Single().Title);
+        }
+
+        [Fact]
+        public async Task SearchAsync_WithAllSizeOrColor_DoesNotFilterThatField()
+        {
+            await SeedVendorWithProductsAsync(
+                ("Red Medium", "x", NigerianState.Lagos, "Ikeja", ListingStatus.Live, "M", "Red"),
+                ("Blue Medium", "x", NigerianState.Lagos, "Ikeja", ListingStatus.Live, "M", "Blue"),
+                ("Red Large", "x", NigerianState.Lagos, "Ikeja", ListingStatus.Live, "L", "Red"));
+
+            await using var db = _fixture.CreateContext();
+            var repo = new ProductQueryRepository(db);
+
+            var sizeAll = await repo.SearchAsync(
+                new ProductQuery(Size: "All", Color: "Red"), CancellationToken.None);
+            var colorAll = await repo.SearchAsync(
+                new ProductQuery(Size: "M", Color: "All"), CancellationToken.None);
+
+            Assert.Equal(2, sizeAll.Total);
+            Assert.Equal(2, colorAll.Total);
         }
 
         [Fact]

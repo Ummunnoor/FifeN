@@ -69,7 +69,8 @@ namespace FifeN.Tests.Integration
             Guid vendorProfileId, Guid categoryId, string title, string description,
             NigerianState state, string city, decimal price = 10000m,
             ListingStatus status = ListingStatus.Live,
-            DateTimeOffset? createdAt = null, DateTimeOffset? updatedAt = null) => new()
+            DateTimeOffset? createdAt = null, DateTimeOffset? updatedAt = null,
+            string? size = null, string? color = null) => new()
         {
             Id = Guid.NewGuid(),
             VendorProfileId = vendorProfileId,
@@ -78,7 +79,8 @@ namespace FifeN.Tests.Integration
             Description = description,
             Price = new Money(price),
             PriceType = PriceType.Fixed,
-            Condition = ProductCondition.New,
+            Size = size,
+            Color = color,
             Location = new Location(state, city),
             Status = status,
             CreatedAtUtc = createdAt ?? DateTimeOffset.UtcNow,

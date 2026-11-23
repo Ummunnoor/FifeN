@@ -279,9 +279,7 @@ Rules & validation
 - Price in NGN, greater than ₦0; flag as Fixed or Negotiable; “Contact
   for price” optional.
 
-- Single category per product. Condition is category-dependent: New/Used
-  for fashion, shoes and home goods; locked to New/Sealed for Food &
-  Groceries and Beauty & Personal Care.
+- Single category per product. Size and color are optional listing details.
 
 - Soft cap of 50 active listings per vendor (raised on request).
 
@@ -312,8 +310,8 @@ Rules & validation
 - Search covers title + category + city/state, with description at lower
   weight; case-insensitive, partial match.
 
-- Filters: Category, Location (State → City), Price range (Condition and
-  Negotiable optional). Default sort: Most recent; options: Price ↑/↓,
+- Filters: Category, Location (State → City), Price range, Size, and Color.
+  Size and Color use exact matches with an All option. Default sort: Most recent; options: Price ↑/↓,
   Highest rated.
 
 - Location scope: structured State/City filtering is in scope; GPS,

@@ -50,5 +50,9 @@ artifacts/
 .nuget/
 nuget.exe
 NuGet.Config
+
+# Local environment secrets
+.env
+
 # IDE / build caches
 *.lscache

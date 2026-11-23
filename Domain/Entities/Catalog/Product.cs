@@ -36,8 +36,11 @@ namespace Domain.Entities.Catalog
         /// <summary>How the price should be read (Fixed / Negotiable / ContactForPrice).</summary>
         public PriceType PriceType { get; set; } = PriceType.Fixed;
 
-        /// <summary>Item condition; constrained by the category's consumable flag.</summary>
-        public ProductCondition Condition { get; set; }
+        /// <summary>Optional product size.</summary>
+        public string? Size { get; set; }
+
+        /// <summary>Optional product color.</summary>
+        public string? Color { get; set; }
 
         /// <summary>State + city; owned value object. No geospatial data in the MVP.</summary>
         public Location Location { get; set; } = default!;

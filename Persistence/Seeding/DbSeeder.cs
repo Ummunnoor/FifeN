@@ -198,7 +198,8 @@ namespace Persistence.Seeding
             var now = DateTimeOffset.UtcNow;
 
             Product Listing(string vendor, string slug, string title, string description, decimal price,
-                PriceType priceType, ProductCondition condition, NigerianState state, string city, int daysAgo) =>
+                PriceType priceType, NigerianState state, string city, int daysAgo,
+                string? size = null, string? color = null) =>
                 new()
                 {
                     Id = Guid.CreateVersion7(),
@@ -208,7 +209,8 @@ namespace Persistence.Seeding
                     Description = description,
                     Price = new Money(price),
                     PriceType = priceType,
-                    Condition = condition,
+                    Size = size,
+                    Color = color,
                     Location = new Location(state, city),
                     Status = ListingStatus.Live,
                     Attributes = new Dictionary<string, string>(),
@@ -218,16 +220,16 @@ namespace Persistence.Seeding
 
             var products = new List<Product>
             {
-                Listing("Lagos Ankara House", "fashion-clothing", "Ankara Print Dress", "Vibrant handmade Ankara dress.", 12000m, PriceType.Negotiable, ProductCondition.New, NigerianState.Lagos, "Lagos", 6),
-                Listing("Lagos Ankara House", "fashion-clothing", "Ankara Flared Skirt", "Matching Ankara flared skirt.", 7000m, PriceType.Negotiable, ProductCondition.New, NigerianState.Lagos, "Lagos", 3),
-                Listing("StepRight Footwear", "shoes", "Men's Leather Loafers", "Classic handcrafted leather loafers.", 9500m, PriceType.Fixed, ProductCondition.New, NigerianState.Lagos, "Lagos", 5),
-                Listing("StepRight Footwear", "shoes", "Canvas Sneakers", "Lightweight everyday canvas sneakers.", 11000m, PriceType.Fixed, ProductCondition.New, NigerianState.Lagos, "Lagos", 2),
-                Listing("ComfyHome Beddings", "home-beddings", "6-Piece Bedding Set", "Soft cotton bedding set, queen size.", 18000m, PriceType.Fixed, ProductCondition.New, NigerianState.Fct, "Abuja", 5),
-                Listing("ComfyHome Beddings", "home-beddings", "Duvet & Pillow Set", "Warm duvet with two pillows.", 22000m, PriceType.Fixed, ProductCondition.New, NigerianState.Fct, "Abuja", 1),
-                Listing("FreshMart Groceries", "food-groceries", "Beans Powder 1kg", "Stone-free milled beans powder.", 3500m, PriceType.Fixed, ProductCondition.New, NigerianState.Oyo, "Ibadan", 4),
-                Listing("FreshMart Groceries", "food-groceries", "Garri 5kg", "Premium white garri.", 5000m, PriceType.Fixed, ProductCondition.New, NigerianState.Oyo, "Ibadan", 2),
-                Listing("GlowCare Beauty", "beauty-personal-care", "Liquid Soap 5L", "Gentle moisturising liquid soap.", 4000m, PriceType.Fixed, ProductCondition.New, NigerianState.Lagos, "Lagos", 3),
-                Listing("GlowCare Beauty", "beauty-personal-care", "Toilet Wash 1L", "Antibacterial toilet wash.", 1800m, PriceType.Fixed, ProductCondition.New, NigerianState.Lagos, "Lagos", 1),
+                Listing("Lagos Ankara House", "fashion-clothing", "Ankara Print Dress", "Vibrant handmade Ankara dress.", 12000m, PriceType.Negotiable, NigerianState.Lagos, "Lagos", 6, "M", "Multicolor"),
+                Listing("Lagos Ankara House", "fashion-clothing", "Ankara Flared Skirt", "Matching Ankara flared skirt.", 7000m, PriceType.Negotiable, NigerianState.Lagos, "Lagos", 3, "M", "Multicolor"),
+                Listing("StepRight Footwear", "shoes", "Men's Leather Loafers", "Classic handcrafted leather loafers.", 9500m, PriceType.Fixed, NigerianState.Lagos, "Lagos", 5, "42", "Brown"),
+                Listing("StepRight Footwear", "shoes", "Canvas Sneakers", "Lightweight everyday canvas sneakers.", 11000m, PriceType.Fixed, NigerianState.Lagos, "Lagos", 2, "42", "Blue"),
+                Listing("ComfyHome Beddings", "home-beddings", "6-Piece Bedding Set", "Soft cotton bedding set, queen size.", 18000m, PriceType.Fixed, NigerianState.Fct, "Abuja", 5, "Queen", "White"),
+                Listing("ComfyHome Beddings", "home-beddings", "Duvet & Pillow Set", "Warm duvet with two pillows.", 22000m, PriceType.Fixed, NigerianState.Fct, "Abuja", 1, "King", "White"),
+                Listing("FreshMart Groceries", "food-groceries", "Beans Powder 1kg", "Stone-free milled beans powder.", 3500m, PriceType.Fixed, NigerianState.Oyo, "Ibadan", 4, "1kg"),
+                Listing("FreshMart Groceries", "food-groceries", "Garri 5kg", "Premium white garri.", 5000m, PriceType.Fixed, NigerianState.Oyo, "Ibadan", 2, "5kg"),
+                Listing("GlowCare Beauty", "beauty-personal-care", "Liquid Soap 5L", "Gentle moisturising liquid soap.", 4000m, PriceType.Fixed, NigerianState.Lagos, "Lagos", 3, "5L"),
+                Listing("GlowCare Beauty", "beauty-personal-care", "Toilet Wash 1L", "Antibacterial toilet wash.", 1800m, PriceType.Fixed, NigerianState.Lagos, "Lagos", 1, "1L"),
             };
             db.Products.AddRange(products);
             await db.SaveChangesAsync(ct);

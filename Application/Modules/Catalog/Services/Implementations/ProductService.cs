@@ -41,7 +41,6 @@ namespace Application.Modules.Catalog.Services.Implementations
         {
             var vendor = await RequireVendor(userId, ct);
             var category = await RequireCategory(request.CategoryId, ct);
-            EnsureConditionAllowed(request.Condition, category);
 
             if (await products.CountActiveByVendorAsync(vendor.Id, ct) >= MaxActiveListings)
                 throw new BusinessRuleException(
@@ -57,7 +56,8 @@ namespace Application.Modules.Catalog.Services.Implementations
                 Description = request.Description.Trim(),
                 Price = new Money(request.PriceAmount),
                 PriceType = request.PriceType,
-                Condition = request.Condition,
+                Size = NormalizeOptionalText(request.Size),
+                Color = NormalizeOptionalText(request.Color),
                 Location = new Location(request.State, request.City.Trim()),
                 Attributes = request.Attributes ?? new Dictionary<string, string>(),
                 // Probation vendors' listings are pre-moderated (hidden until an admin approves them).
@@ -93,13 +93,13 @@ namespace Application.Modules.Catalog.Services.Implementations
             var vendor = await RequireVendor(userId, ct);
             var product = await RequireOwnedProduct(productId, vendor.Id, ct);
             var category = await RequireCategory(request.CategoryId, ct);
-            EnsureConditionAllowed(request.Condition, category);
 
             product.Title = request.Title.Trim();
             product.Description = request.Description.Trim();
             product.Price = new Money(request.PriceAmount);
             product.PriceType = request.PriceType;
-            product.Condition = request.Condition;
+            product.Size = NormalizeOptionalText(request.Size);
+            product.Color = NormalizeOptionalText(request.Color);
             product.CategoryId = category.Id;
             product.Location = new Location(request.State, request.City.Trim());
             product.UpdatedAtUtc = DateTimeOffset.UtcNow;
@@ -237,17 +237,8 @@ namespace Application.Modules.Catalog.Services.Implementations
             return product;
         }
 
-        private static void EnsureConditionAllowed(ProductCondition condition, Category category)
-        {
-            var allowed = category.IsConsumable
-                ? condition is ProductCondition.New or ProductCondition.Sealed
-                : condition is ProductCondition.New or ProductCondition.Used;
-
-            if (!allowed)
-                throw new BusinessRuleException(category.IsConsumable
-                    ? "Consumable items must be New or Sealed."
-                    : "This category supports only New or Used items.");
-        }
+        private static string? NormalizeOptionalText(string? value) =>
+            string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
         /// <summary>
         /// Verifies the leading bytes match a supported image format (JPEG, PNG, or WebP). Defends
@@ -295,7 +286,7 @@ namespace Application.Modules.Catalog.Services.Implementations
             Product p, VendorProfile vendor, string categoryName,
             IReadOnlyList<string> imageUrls, double average, int reviewCount) =>
             new(
-                p.Id, p.Title, p.Description, p.Price.Amount, p.Price.Currency, p.PriceType, p.Condition,
+                p.Id, p.Title, p.Description, p.Price.Amount, p.Price.Currency, p.PriceType, p.Size, p.Color,
                 categoryName, p.Location.State, p.Location.City, imageUrls,
                 vendor.Id, vendor.BusinessName, vendor.VerificationStatus == VerificationStatus.Verified,
                 average, reviewCount, p.Status, p.CreatedAtUtc,

@@ -12,10 +12,11 @@ namespace Application.Modules.Catalog.Validators
             System.Func<T, string> description,
             System.Func<T, decimal> price,
             System.Func<T, PriceType> priceType,
-            System.Func<T, ProductCondition> condition,
             System.Func<T, System.Guid> categoryId,
             System.Func<T, NigerianState> state,
-            System.Func<T, string> city)
+            System.Func<T, string> city,
+            System.Func<T, string?> size,
+            System.Func<T, string?> color)
         {
             RuleFor(x => title(x))
                 .NotEmpty().WithMessage("Title is required.")
@@ -31,12 +32,13 @@ namespace Application.Modules.Catalog.Validators
                 .WithMessage("Price must be greater than ₦0.");
 
             RuleFor(x => priceType(x)).IsInEnum().WithMessage("A valid price type is required.");
-            RuleFor(x => condition(x)).IsInEnum().WithMessage("A valid condition is required.");
             RuleFor(x => state(x)).IsInEnum().WithMessage("A valid Nigerian state is required.");
             RuleFor(x => categoryId(x)).NotEmpty().WithMessage("A category is required.");
             RuleFor(x => city(x))
                 .NotEmpty().WithMessage("City is required.")
                 .MaximumLength(80).WithMessage("City cannot exceed 80 characters.");
+            RuleFor(x => size(x)).MaximumLength(50).WithMessage("Size cannot exceed 50 characters.");
+            RuleFor(x => color(x)).MaximumLength(50).WithMessage("Color cannot exceed 50 characters.");
         }
     }
 
@@ -44,13 +46,13 @@ namespace Application.Modules.Catalog.Validators
     {
         public CreateProductValidator() => ApplyCommonRules(
             x => x.Title, x => x.Description, x => x.PriceAmount, x => x.PriceType,
-            x => x.Condition, x => x.CategoryId, x => x.State, x => x.City);
+            x => x.CategoryId, x => x.State, x => x.City, x => x.Size, x => x.Color);
     }
 
     public class UpdateProductValidator : ProductWriteValidator<UpdateProductRequest>
     {
         public UpdateProductValidator() => ApplyCommonRules(
             x => x.Title, x => x.Description, x => x.PriceAmount, x => x.PriceType,
-            x => x.Condition, x => x.CategoryId, x => x.State, x => x.City);
+            x => x.CategoryId, x => x.State, x => x.City, x => x.Size, x => x.Color);
     }
 }

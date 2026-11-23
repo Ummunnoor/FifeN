@@ -10,11 +10,12 @@ namespace Application.Modules.Catalog.DTOs
         string Description,
         decimal PriceAmount,
         PriceType PriceType,
-        ProductCondition Condition,
         Guid CategoryId,
         NigerianState State,
         string City,
-        Dictionary<string, string>? Attributes);
+        Dictionary<string, string>? Attributes,
+        string? Size = null,
+        string? Color = null);
 
     /// <summary>Update-a-listing payload (attributes are managed separately).</summary>
     public record UpdateProductRequest(
@@ -22,10 +23,11 @@ namespace Application.Modules.Catalog.DTOs
         string Description,
         decimal PriceAmount,
         PriceType PriceType,
-        ProductCondition Condition,
         Guid CategoryId,
         NigerianState State,
-        string City);
+        string City,
+        string? Size = null,
+        string? Color = null);
 
     /// <summary>Vendor status transition for a listing (Unavailable / Live / Archived).</summary>
     public record ChangeStatusRequest(ListingStatus Status);
@@ -40,6 +42,8 @@ namespace Application.Modules.Catalog.DTOs
         decimal PriceAmount,
         string Currency,
         PriceType PriceType,
+        string? Size,
+        string? Color,
         string? CoverUrl,
         string City,
         NigerianState State,
@@ -57,7 +61,8 @@ namespace Application.Modules.Catalog.DTOs
         decimal PriceAmount,
         string Currency,
         PriceType PriceType,
-        ProductCondition Condition,
+        string? Size,
+        string? Color,
         string CategoryName,
         NigerianState State,
         string City,

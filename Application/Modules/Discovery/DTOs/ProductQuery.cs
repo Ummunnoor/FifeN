@@ -14,7 +14,8 @@ namespace Application.Modules.Discovery.DTOs
         string? City = null,
         decimal? MinPrice = null,
         decimal? MaxPrice = null,
-        ProductCondition? Condition = null,
+        string? Size = null,
+        string? Color = null,
         string Sort = "recent",
         int Page = 1,
         int PageSize = 20);

@@ -27,6 +27,8 @@ namespace Persistence.Modules.Discovery
             p.Price.Amount,
             p.Price.Currency,
             p.PriceType,
+            p.Size,
+            p.Color,
             p.Images.OrderByDescending(i => i.IsCover).ThenBy(i => i.SortOrder).Select(i => i.Url).FirstOrDefault(),
             p.Location.City,
             p.Location.State,
@@ -59,8 +61,18 @@ namespace Persistence.Modules.Discovery
                 listings = listings.Where(p => p.Location.State == state);
             if (!string.IsNullOrWhiteSpace(q.City))
                 listings = listings.Where(p => EF.Functions.ILike(p.Location.City, q.City));
-            if (q.Condition is { } condition)
-                listings = listings.Where(p => p.Condition == condition);
+            if (!string.IsNullOrWhiteSpace(q.Size)
+                && !string.Equals(q.Size.Trim(), "All", StringComparison.OrdinalIgnoreCase))
+            {
+                var size = q.Size.Trim();
+                listings = listings.Where(p => p.Size == size);
+            }
+            if (!string.IsNullOrWhiteSpace(q.Color)
+                && !string.Equals(q.Color.Trim(), "All", StringComparison.OrdinalIgnoreCase))
+            {
+                var color = q.Color.Trim();
+                listings = listings.Where(p => p.Color == color);
+            }
             if (q.MinPrice is { } min)
                 listings = listings.Where(p => p.Price.Amount >= min);
             if (q.MaxPrice is { } max)

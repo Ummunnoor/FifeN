@@ -12,7 +12,8 @@ using Persistence.Repositories.Authentication;
 using Persistence.Seeding;
 using Scalar.AspNetCore;
 using Serilog;
-
+using DotNetEnv;
+Env.Load();
 var builder = WebApplication.CreateBuilder(args);
 
 // ---------- Serilog ----------

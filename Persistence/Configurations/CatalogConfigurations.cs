@@ -23,7 +23,8 @@ namespace Persistence.Configurations
             b.HasKey(x => x.Id);
             b.Property(x => x.Title).HasMaxLength(80).IsRequired();
             b.Property(x => x.Description).HasMaxLength(1000).IsRequired();
-            b.Property(x => x.Condition).HasConversion<string>().HasMaxLength(20);
+            b.Property(x => x.Size).HasMaxLength(50);
+            b.Property(x => x.Color).HasMaxLength(50);
             b.Property(x => x.PriceType).HasConversion<string>().HasMaxLength(20);
             b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             b.Property(x => x.Attributes).HasColumnType("jsonb");

@@ -40,7 +40,6 @@ public enum VendorRequestStatus { Pending, Approved, Rejected }
 public enum RejectionReason { NameMismatch, UnreadableDocument, IneligibleBusiness, SuspectedFraud, Other }
 
 public enum PriceType { Fixed, Negotiable, ContactForPrice }
-public enum ProductCondition { New, Used, Sealed }      // Sealed/New only for consumable categories
 public enum ListingStatus { Live, Unavailable, Archived, Removed }
 
 public enum LeadStatus { New, Viewed, Closed }
@@ -135,7 +134,7 @@ public class Category
     public string Slug { get; set; } = default!;       // unique
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
-    public bool IsConsumable { get; set; }             // forces Condition = New/Sealed
+    public bool IsConsumable { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
 }
 
@@ -150,7 +149,8 @@ public class Product
     public string Description { get; set; } = default!;  // <= 1000 chars
     public Money Price { get; set; } = default!;         // owned
     public PriceType PriceType { get; set; } = PriceType.Fixed;
-    public ProductCondition Condition { get; set; }
+    public string? Size { get; set; }
+    public string? Color { get; set; }
     public Location Location { get; set; } = default!;   // owned (State + City)
     public ListingStatus Status { get; set; } = ListingStatus.Live;
     public Dictionary<string, string> Attributes { get; set; } = new(); // jsonb
@@ -305,7 +305,8 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         b.HasKey(x => x.Id);
         b.Property(x => x.Title).HasMaxLength(80).IsRequired();
         b.Property(x => x.Description).HasMaxLength(1000).IsRequired();
-        b.Property(x => x.Condition).HasConversion<string>();
+        b.Property(x => x.Size).HasMaxLength(50);
+        b.Property(x => x.Color).HasMaxLength(50);
         b.Property(x => x.PriceType).HasConversion<string>();
         b.Property(x => x.Status).HasConversion<string>();
         b.Property(x => x.Attributes).HasColumnType("jsonb");
@@ -456,22 +457,22 @@ public record UpdateVendorProfileRequest(string WhatsAppNumber);
 ### 3.3 Catalog (Listings)
 ```csharp
 public record CreateProductRequest(string Title, string Description, decimal PriceAmount,
-    PriceType PriceType, ProductCondition Condition, Guid CategoryId, NigerianState State, string City,
-    Dictionary<string,string>? Attributes);
+    PriceType PriceType, Guid CategoryId, NigerianState State, string City,
+    Dictionary<string,string>? Attributes, string? Size, string? Color);
 public record UpdateProductRequest(string Title, string Description, decimal PriceAmount,
-    PriceType PriceType, ProductCondition Condition, Guid CategoryId, NigerianState State, string City);
+    PriceType PriceType, Guid CategoryId, NigerianState State, string City, string? Size, string? Color);
 public record ChangeStatusRequest(ListingStatus Status); // Unavailable / Live / Archived
 public record ProductSummary(Guid Id, string Title, decimal PriceAmount, string Currency, PriceType PriceType,
-    string? CoverUrl, string City, NigerianState State, Guid VendorId, string VendorName, bool VendorVerified, double AverageRating);
+    string? Size, string? Color, string? CoverUrl, string City, NigerianState State, Guid VendorId, string VendorName, bool VendorVerified, double AverageRating);
 public record ProductDetail(Guid Id, string Title, string Description, decimal PriceAmount, string Currency,
-    PriceType PriceType, ProductCondition Condition, string CategoryName, NigerianState State, string City,
+    PriceType PriceType, string? Size, string? Color, string CategoryName, NigerianState State, string City,
     IReadOnlyList<string> ImageUrls, Guid VendorId, string VendorName, bool VendorVerified,
     double AverageRating, int ReviewCount, ListingStatus Status, DateTimeOffset CreatedAtUtc);
 ```
 
 | Method | Route | Auth | Request | Success | Rules & errors |
 |---|---|---|---|---|---|
-| POST | `/products` | Vendor | `CreateProductRequest` | `201 ProductDetail` | Vendor must be approved. Title ≤80, desc ≤1000, price >0. Condition must be valid for category (`New`/`Sealed` only if `Category.IsConsumable`). Max 50 active listings. Probation vendors' first 3 enter pre-publish moderation (`Status=Unavailable` until approved). Errors: `403` not approved, `422` business rule (cap/condition), `400`. |
+| POST | `/products` | Vendor | `CreateProductRequest` | `201 ProductDetail` | Vendor must be approved. Title ≤80, desc ≤1000, price >0; optional Size and Color ≤50 characters. Max 50 active listings. Probation vendors' first 3 enter pre-publish moderation (`Status=Unavailable` until approved). Errors: `403` not approved, `422` business rule (cap), `400`. |
 | PUT | `/products/{id}` | Vendor (owner) | `UpdateProductRequest` | `200 ProductDetail` | Owner only; untrusted/reported items re-moderated. Errors: `403`, `404`. |
 | PATCH | `/products/{id}/status` | Vendor (owner) | `ChangeStatusRequest` | `200` | Mark Unavailable/reactivate/Archive. `403`,`404`,`422` illegal transition. |
 | DELETE | `/products/{id}` | Vendor (owner) / Admin | — | `204` | Soft delete → `Archived`. |
@@ -482,14 +483,14 @@ public record ProductDetail(Guid Id, string Title, string Description, decimal P
 ### 3.4 Discovery & Search
 ```csharp
 public record ProductQuery(string? Q, Guid? CategoryId, NigerianState? State, string? City,
-    decimal? MinPrice, decimal? MaxPrice, ProductCondition? Condition, string Sort = "recent",
+    decimal? MinPrice, decimal? MaxPrice, string? Size, string? Color, string Sort = "recent",
     int Page = 1, int PageSize = 20);
 public record PagedResponse<T>(IReadOnlyList<T> Items, int Page, int PageSize, int Total);
 ```
 
 | Method | Route | Auth | Request | Success | Rules & errors |
 |---|---|---|---|---|---|
-| GET | `/products` | Anon | `ProductQuery` (query string) | `200 PagedResponse<ProductSummary>` | FTS on `Q` (tsvector + `pg_trgm` typo tolerance). Location filter = State→City only (no geo). Sort: `recent` (default), `price_asc`, `price_desc`, `rating`. Excludes non-Live and suspended/unapproved vendors. `PageSize` capped at 50. Errors: `400` bad params. |
+| GET | `/products` | Anon | `ProductQuery` (query string) | `200 PagedResponse<ProductSummary>` | FTS on `Q` (tsvector + `pg_trgm` typo tolerance). Exact-match Size and Color filters; `All` disables the respective filter. Location filter = State→City only (no geo). Sort: `recent` (default), `price_asc`, `price_desc`, `rating`. Excludes non-Live and suspended/unapproved vendors. `PageSize` capped at 50. Errors: `400` bad params. |
 | GET | `/products/new` | Anon | `{ Guid? CategoryId }` | `200 PagedResponse<ProductSummary>` | "New this week" fresh-supply feed. |
 | GET | `/categories` | Anon | — | `200 IReadOnlyList<CategoryResponse>` | Active categories only. |
 
