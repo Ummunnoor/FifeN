@@ -12,20 +12,24 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Persistence.Seeding
 {
     /// <summary>
-    /// Idempotent development/demo seed: RBAC roles, a founder + two admins, the five launch categories,
-    /// a pilot cohort of verified ("Trusted") vendors with live listings, and a handful of interactions
-    /// and reviews — several flagged cross-discovery — so discovery feeds and the admin dashboard have
-    /// real data to show. Every step checks for existence first, so it is safe to run on every startup.
+    /// Idempotent seeding for production essentials and development demo data.
     /// </summary>
     public static class DbSeeder
     {
-        public static async Task SeedAsync(IServiceProvider sp, CancellationToken ct = default)
+        private static readonly string[] ProductionRoles =
+        [
+            nameof(AppRole.Admin),
+            nameof(AppRole.Vendor),
+            nameof(AppRole.User)
+        ];
+
+        public static async Task SeedDevelopmentDataAsync(IServiceProvider sp, CancellationToken ct = default)
         {
             var roles = sp.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
             var users = sp.GetRequiredService<UserManager<User>>();
             var db = sp.GetRequiredService<FifeNDbContext>();
 
-            await SeedRolesAsync(roles);
+            await EnsureRolesAsync(roles, Enum.GetNames<AppRole>());
             await SeedAdminsAsync(users);
             var categories = await SeedCategoriesAsync(db, ct);
             var vendors = await SeedVendorsAsync(users, db, ct);
@@ -33,15 +37,49 @@ namespace Persistence.Seeding
             await SeedCatalogAndEngagementAsync(db, categories, vendors, buyers, ct);
         }
 
-        /// <summary>Ensures the explicitly designated business email has the Admin role in every environment.</summary>
-        public static Task EnsureBusinessAdminAsync(IServiceProvider sp) =>
-            EnsureEmailAdminAsync(sp.GetRequiredService<UserManager<User>>(), "easypeasyhighstreet@gmail.com");
-
-        private static async Task SeedRolesAsync(RoleManager<IdentityRole<Guid>> roles)
+        public static async Task SeedProductionEssentialsAsync(IServiceProvider sp, CancellationToken ct = default)
         {
-            foreach (var role in Enum.GetNames<AppRole>())
+            await SeedRolesAsync(sp);
+            await SeedBusinessAdminAsync(sp);
+            await SeedCategoriesAsync(sp, ct);
+        }
+
+        public static Task SeedRolesAsync(IServiceProvider sp)
+        {
+            var roles = sp.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+            return EnsureRolesAsync(roles, ProductionRoles);
+        }
+
+        public static Task SeedBusinessAdminAsync(IServiceProvider sp) =>
+            EnsureEmailAdminAsync(
+                sp.GetRequiredService<UserManager<User>>(),
+                "easypeasyhighstreet@gmail.com");
+
+        public static Task EnsureBusinessAdminAsync(IServiceProvider sp) =>
+            SeedBusinessAdminAsync(sp);
+
+        public static async Task SeedCategoriesAsync(IServiceProvider sp, CancellationToken ct = default)
+        {
+            var db = sp.GetRequiredService<FifeNDbContext>();
+            await SeedCategoriesAsync(db, ct);
+        }
+
+        // Retained for callers of the previous development-only seeding API.
+        public static Task SeedAsync(IServiceProvider sp, CancellationToken ct = default) =>
+            SeedDevelopmentDataAsync(sp, ct);
+
+        private static async Task EnsureRolesAsync(
+            RoleManager<IdentityRole<Guid>> roles,
+            IEnumerable<string> roleNames)
+        {
+            foreach (var role in roleNames)
                 if (!await roles.RoleExistsAsync(role))
-                    await roles.CreateAsync(new IdentityRole<Guid>(role));
+                {
+                    var result = await roles.CreateAsync(new IdentityRole<Guid>(role));
+                    if (!result.Succeeded)
+                        throw new InvalidOperationException(
+                            $"Failed to seed role {role}: {string.Join("; ", result.Errors.Select(e => e.Description))}");
+                }
         }
 
         private static async Task SeedAdminsAsync(UserManager<User> users)

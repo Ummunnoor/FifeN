@@ -3,12 +3,10 @@ using System.Text.Json.Serialization;
 using API.RateLimiting;
 using Application.DependencyInjection;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Persistence;
 using Persistence.DependencyInjection;
 using Persistence.Middleware;
-using Persistence.Repositories.Authentication;
 using Persistence.Seeding;
 using Scalar.AspNetCore;
 using Serilog;
@@ -54,11 +52,18 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend", policy => policy
-    .WithOrigins("http://localhost:5173")
-    .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE")
-    .WithHeaders("Authorization", "Content-Type")
-        .AllowCredentials());
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:5173",          // Local development
+                "https://owambemarket.com",       // Production
+                "https://www.owambemarket.com"    // Production with www
+            )
+            .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE")
+            .WithHeaders("Authorization", "Content-Type")
+            .AllowCredentials();
+    });
 });
 
 var app = builder.Build();
@@ -95,14 +100,10 @@ using (var scope = app.Services.CreateScope())
     if (app.Environment.IsDevelopment())
         await services.GetRequiredService<FifeNDbContext>().Database.MigrateAsync();
 
-    var roleManager = services.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
-    await RoleSeeder.SeedAsync(roleManager);
-    await DbSeeder.EnsureBusinessAdminAsync(services);
-
-    // Full demo dataset (founder/admins, categories, pilot vendors, listings, interactions, reviews):
-    // Development by default, Production only with an explicit --seed flag. Idempotent.
-    if (app.Environment.IsDevelopment() || args.Contains("--seed"))
-        await DbSeeder.SeedAsync(services);
+    if (app.Environment.IsDevelopment())
+        await DbSeeder.SeedDevelopmentDataAsync(services);
+    else
+        await DbSeeder.SeedProductionEssentialsAsync(services);
 }
 
 try

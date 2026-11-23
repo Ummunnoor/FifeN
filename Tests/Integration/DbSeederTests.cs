@@ -29,7 +29,14 @@ namespace FifeN.Tests.Integration
         {
             await using var provider = _fixture.BuildServiceProvider();
             using var scope = provider.CreateScope();
-            await DbSeeder.SeedAsync(scope.ServiceProvider, CancellationToken.None);
+            await DbSeeder.SeedDevelopmentDataAsync(scope.ServiceProvider, CancellationToken.None);
+        }
+
+        private async Task SeedProductionAsync()
+        {
+            await using var provider = _fixture.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+            await DbSeeder.SeedProductionEssentialsAsync(scope.ServiceProvider, CancellationToken.None);
         }
 
         [Fact]
@@ -84,6 +91,27 @@ namespace FifeN.Tests.Integration
             Assert.Equal(10, await db.Products.CountAsync());
             Assert.Equal(6, await db.Interactions.CountAsync());
             Assert.Equal(4, await db.Reviews.IgnoreQueryFilters().CountAsync());
+        }
+
+        [Fact]
+        public async Task SeedProductionEssentialsAsync_SeedsOnlyRequiredData_AndIsIdempotent()
+        {
+            await SeedProductionAsync();
+            await SeedProductionAsync();
+
+            await using var db = _fixture.CreateContext();
+
+            Assert.Equal(3, await db.Roles.CountAsync());
+            Assert.Equal(
+                new[] { nameof(AppRole.Admin), nameof(AppRole.User), nameof(AppRole.Vendor) },
+                await db.Roles.OrderBy(role => role.Name).Select(role => role.Name).ToArrayAsync());
+            Assert.Equal(1, await db.Users.CountAsync());
+            Assert.Equal(1, await db.Users.CountAsync(user => user.Email == "easypeasyhighstreet@gmail.com"));
+            Assert.Equal(5, await db.Categories.CountAsync());
+            Assert.Empty(await db.VendorProfiles.ToListAsync());
+            Assert.Empty(await db.Products.ToListAsync());
+            Assert.Empty(await db.Interactions.ToListAsync());
+            Assert.Empty(await db.Reviews.IgnoreQueryFilters().ToListAsync());
         }
     }
 }
