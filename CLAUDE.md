@@ -10,6 +10,20 @@ dotnet run --project API/API.csproj            # dev: auto-migrates + seeds demo
 dotnet run --project API/API.csproj -- --seed  # force DbSeeder outside Development
 ```
 
+## CI/CD
+
+GitHub Actions is configured in `.github/workflows/ci-cd.yml`. It runs on pushes to `main` and on
+pull requests, restoring, building, and testing `FifeN.sln` with .NET 10. After those steps pass on a
+push to `main`, it builds the API image from the root `Dockerfile` and publishes it to GHCR as
+`ghcr.io/<owner>/<repository>/api:latest` and `ghcr.io/<owner>/<repository>/api:<commit-sha>`.
+
+The workflow uses the automatically provided `GITHUB_TOKEN` with `packages: write` permission to
+authenticate to `ghcr.io`; no personal access token or per-run credentials are required. The image
+name is derived from the repository owner/name. `.dockerignore` excludes local environment secrets
+and build artifacts from the Docker build context. Ensure GitHub Actions is enabled for the repo and
+the workflow's `GITHUB_TOKEN` is permitted to write packages in the repository's Actions settings.
+Manage the published image's visibility and access through its GitHub package settings.
+
 ### Database Migrations (EF Core)
 
 ```bash

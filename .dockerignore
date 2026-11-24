@@ -1,0 +1,9 @@
+.git
+.github
+.vs
+.vscode
+.env
+**/bin
+**/obj
+**/TestResults
+**/.DS_Store
