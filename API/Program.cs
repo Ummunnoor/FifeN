@@ -96,18 +96,15 @@ app.MapHub<ChatHub>("/hubs/chats");
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
+    var db = services.GetRequiredService<FifeNDbContext>();
+
+    // Apply migrations in all environments for now
+    await db.Database.MigrateAsync();
 
     if (app.Environment.IsDevelopment())
-    {
-        // Optional: still auto-migrate in Development for convenience
-        await services.GetRequiredService<FifeNDbContext>().Database.MigrateAsync();
         await DbSeeder.SeedDevelopmentDataAsync(services);
-    }
     else
-    {
-        // Production: only seed essentials (no auto-migrate)
         await DbSeeder.SeedProductionEssentialsAsync(services);
-    }
 }
 
 try
