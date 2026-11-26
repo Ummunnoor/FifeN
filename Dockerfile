@@ -15,6 +15,14 @@ COPY . .
 WORKDIR /src/API
 RUN dotnet publish API.csproj --configuration Release --no-restore --output /app/publish
 
+# Create the migration bundle
+RUN dotnet ef migrations bundle \
+    --self-contained \
+    --target-runtime linux-x64 \
+    --output /app/publish/efbundle \
+    --project ../Persistence/Persistence.csproj \
+    --startup-project API.csproj
+
 FROM base AS final
 WORKDIR /app
 COPY --from=build /app/publish .

@@ -98,12 +98,16 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
 
     if (app.Environment.IsDevelopment())
+    {
+        // Optional: still auto-migrate in Development for convenience
         await services.GetRequiredService<FifeNDbContext>().Database.MigrateAsync();
-
-    if (app.Environment.IsDevelopment())
         await DbSeeder.SeedDevelopmentDataAsync(services);
+    }
     else
+    {
+        // Production: only seed essentials (no auto-migrate)
         await DbSeeder.SeedProductionEssentialsAsync(services);
+    }
 }
 
 try
